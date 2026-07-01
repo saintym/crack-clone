@@ -1,0 +1,44 @@
+spring:
+  application:
+    name: crack-backend
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/crack
+    username: postgres
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+    open-in-view: false
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  port: 8082
+
+crack:
+  data-path: ${CRACK_DATA_PATH:../data}
+  ai:
+    default-provider: ${CRACK_AI_PROVIDER:claude-code-cli}
+  auth:
+    password: ${CRACK_PASSWORD:changeme}
+    token-secret: ${CRACK_TOKEN_SECRET:change-me-local-secret}
+
+claude:
+  api-key: ${CLAUDE_API_KEY:}
+  model: claude-sonnet-4-20250514
+  opus-model: claude-opus-4-20250514
+  haiku-model: claude-haiku-4-5-20251001
+  max-tokens: 2048
+
+logging:
+  level:
+    org.hibernate.SQL: debug

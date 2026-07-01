@@ -1,0 +1,29 @@
+# OS
+.DS_Store
+
+# Build & dependencies
+crack-backend/build/
+crack-backend/.gradle/
+crack-backend/bin/
+crack-frontend/node_modules/
+crack-frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Local config (secrets) — application.yml.example 참고
+crack-backend/src/main/resources/application.yml
+
+# Env
+.env
+.env.*
+
+# 캐시
+**/.vite/
+
+# 개인 롤플레이 데이터 (템플릿만 공개)
+/data/*
+!/data/_templates/
+crack-backend/data/

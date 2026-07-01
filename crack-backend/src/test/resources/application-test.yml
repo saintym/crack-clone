@@ -1,0 +1,24 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        format_sql: true
+
+  flyway:
+    enabled: false
+
+crack:
+  data-path: ${java.io.tmpdir}/crack-test-data
+
+claude:
+  api-key: test-key
+  model: claude-sonnet-4-20250514
+  max-tokens: 100

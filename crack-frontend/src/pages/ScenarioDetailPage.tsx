@@ -1,0 +1,242 @@
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { documentApi, type CharacterInfo } from '../api/documents';
+import MobileLayout from '../components/layout/MobileLayout';
+
+type Tab = 'world' | 'scenario' | 'characters' | 'protagonist';
+
+export default function ScenarioDetailPage() {
+  const { scenarioName } = useParams<{ scenarioName: string }>();
+  const navigate = useNavigate();
+  const [tab, setTab] = useState<Tab>('world');
+  const [content, setContent] = useState('');
+  const [characters, setCharacters] = useState<CharacterInfo[]>([]);
+  const [selectedChar, setSelectedChar] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [newCharName, setNewCharName] = useState('');
+  const [showNewChar, setShowNewChar] = useState(false);
+
+  useEffect(() => {
+    if (!scenarioName) return;
+    if (tab === 'characters') {
+      loadCharacters();
+    } else {
+      loadDocument(tab);
+    }
+    setEditing(false);
+    setSelectedChar(null);
+  }, [tab, scenarioName]);
+
+  const loadDocument = async (type: string) => {
+    try {
+      const { data } = await documentApi.get(scenarioName!, type);
+      setContent(data.content);
+    } catch {
+      setContent('');
+    }
+  };
+
+  const loadCharacters = async () => {
+    try {
+      const { data } = await documentApi.listCharacters(scenarioName!);
+      setCharacters(data);
+    } catch {
+      setCharacters([]);
+    }
+  };
+
+  const loadCharacter = async (name: string) => {
+    try {
+      const { data } = await documentApi.getCharacter(scenarioName!, name);
+      setContent(data.content);
+      setSelectedChar(name);
+    } catch {
+      setContent('');
+    }
+  };
+
+  const handleSave = async () => {
+    if (!scenarioName) return;
+    setSaving(true);
+    try {
+      if (selectedChar) {
+        await documentApi.updateCharacter(scenarioName, selectedChar, editContent);
+      } else {
+        await documentApi.update(scenarioName, tab, editContent);
+      }
+      setContent(editContent);
+      setEditing(false);
+    } catch (err) {
+      console.error('Save failed:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateChar = async () => {
+    if (!scenarioName || !newCharName.trim()) return;
+    try {
+      await documentApi.createCharacter(scenarioName, newCharName.trim());
+      setNewCharName('');
+      setShowNewChar(false);
+      loadCharacters();
+    } catch (err) {
+      console.error('Create failed:', err);
+    }
+  };
+
+  const handleDeleteChar = async (name: string) => {
+    if (!scenarioName || !confirm(`"${name}" 캐릭터를 삭제하시겠습니까?`)) return;
+    try {
+      await documentApi.deleteCharacter(scenarioName, name);
+      setSelectedChar(null);
+      loadCharacters();
+    } catch (err) {
+      console.error('Delete failed:', err);
+    }
+  };
+
+  const tabs: { key: Tab; label: string }[] = [
+    { key: 'world', label: '세계관' },
+    { key: 'scenario', label: '시나리오' },
+    { key: 'protagonist', label: '주인공' },
+    { key: 'characters', label: '캐릭터' },
+  ];
+
+  return (
+    <MobileLayout
+      title={scenarioName || ''}
+      onBack={() => navigate('/')}
+      rightAction={
+        <button
+          onClick={() => navigate(`/stories/${scenarioName}`)}
+          className="text-accent text-sm font-medium"
+        >
+          스토리
+        </button>
+      }
+    >
+      {/* Tabs */}
+      <div className="flex border-b border-border/40 bg-bg-secondary/60">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 py-3.5 text-[13px] font-medium transition-all ${
+              tab === t.key
+                ? 'text-accent border-b-2 border-accent'
+                : 'text-text-muted hover:text-text-secondary'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="h-[calc(100%-48px)] overflow-y-auto">
+        {tab === 'characters' && !selectedChar ? (
+          /* Character List */
+          <div className="px-5 py-5 space-y-3">
+            {characters.map((c) => (
+              <div
+                key={c.name}
+                className="flex items-center justify-between bg-surface rounded-2xl p-5 border border-border/40 hover:border-border transition-all"
+              >
+                <button
+                  onClick={() => loadCharacter(c.name)}
+                  className="flex-1 text-left"
+                >
+                  <span className="text-[15px] text-text-primary font-medium">{c.name}</span>
+                </button>
+                <button
+                  onClick={() => handleDeleteChar(c.name)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-hover text-text-muted hover:text-danger transition-all"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M18 6L6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            ))}
+
+            {showNewChar ? (
+              <div className="flex gap-3 items-center">
+                <input
+                  type="text"
+                  value={newCharName}
+                  onChange={(e) => setNewCharName(e.target.value)}
+                  placeholder="캐릭터 이름"
+                  autoFocus
+                  className="flex-1 px-4 py-3.5 bg-surface border border-border/60 rounded-2xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/60 text-[15px] transition-all"
+                />
+                <button onClick={handleCreateChar} className="px-5 py-3.5 bg-accent hover:bg-accent-hover text-white rounded-2xl text-sm font-medium transition-all">추가</button>
+                <button onClick={() => { setShowNewChar(false); setNewCharName(''); }} className="px-4 py-3.5 bg-surface hover:bg-surface-hover text-text-muted rounded-2xl text-sm transition-all">취소</button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowNewChar(true)}
+                className="w-full py-4 border border-dashed border-border/60 rounded-2xl text-text-muted text-sm hover:border-accent/60 hover:text-accent transition-all"
+              >
+                + 새 캐릭터
+              </button>
+            )}
+          </div>
+        ) : (
+          /* Document Editor */
+          <div className="px-5 py-5 flex flex-col h-full">
+            {selectedChar && (
+              <button
+                onClick={() => { setSelectedChar(null); setEditing(false); }}
+                className="flex items-center gap-1.5 text-sm text-accent mb-4 text-left hover:text-accent-hover transition-colors"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+                캐릭터 목록
+              </button>
+            )}
+
+            {editing ? (
+              <>
+                <textarea
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="flex-1 w-full p-4 bg-surface border border-border/40 rounded-2xl text-text-primary text-sm font-mono resize-none focus:outline-none focus:border-accent/60 transition-all min-h-[300px] leading-relaxed"
+                />
+                <div className="flex gap-3 mt-4">
+                  <button
+                    onClick={() => setEditing(false)}
+                    className="flex-1 py-3.5 bg-surface hover:bg-surface-hover text-text-secondary rounded-2xl text-[15px] font-medium transition-all"
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving}
+                    className="flex-1 py-3.5 bg-accent hover:bg-accent-hover disabled:opacity-30 text-white rounded-2xl text-[15px] font-semibold transition-all"
+                  >
+                    {saving ? '저장 중...' : '저장'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex-1 p-5 bg-surface border border-border/40 rounded-2xl text-sm text-text-secondary whitespace-pre-wrap overflow-y-auto font-mono min-h-[200px] leading-relaxed">
+                  {content || <span className="text-text-muted italic">(비어있음)</span>}
+                </div>
+                <button
+                  onClick={() => { setEditContent(content); setEditing(true); }}
+                  className="mt-4 py-3.5 bg-accent hover:bg-accent-hover text-white rounded-2xl text-[15px] font-semibold transition-all"
+                >
+                  편집
+                </button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
+    </MobileLayout>
+  );
+}
