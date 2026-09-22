@@ -1,0 +1,2 @@
+- 설월_미소: https://example.com/images/seolwol-smile.webp | 설월이 옅게 웃는 모습
+- 흑풍채_전경: https://example.com/images/heukpung.webp | 산 중턱의 산적 소굴
