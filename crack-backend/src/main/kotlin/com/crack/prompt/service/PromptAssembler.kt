@@ -11,6 +11,7 @@ import com.crack.prompt.contributor.ActiveCharacterSelector
 import com.crack.prompt.contributor.PromptContext
 import com.crack.prompt.contributor.PromptContributor
 import com.crack.prompt.contributor.PromptSlot
+import com.crack.prompt.keyword.KeywordBook
 import com.crack.story.files.StoryDirs
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -28,6 +29,7 @@ data class PromptSection(val slot: PromptSlot, val name: String, val content: St
  * @property sections 조립 순서대로 모든 섹션(BOTTOM 포함)
  * @property activeCharacters CHARACTERS 슬롯에 들어간 인물(§6.2)
  * @property rawMessageCount 원문 범위에 든 저장 메시지 수(가상 입력 제외)
+ * @property activeKeywords KEYWORDS 슬롯에 들어간 키워드북 항목 제목(§8.3, 우선순위 순)
  */
 data class AssembledPrompt(
     val storyId: Long,
@@ -37,6 +39,7 @@ data class AssembledPrompt(
     val activeCharacters: List<String>,
     val rawWindow: RawWindow,
     val rawMessageCount: Int,
+    val activeKeywords: List<String> = emptyList(),
 ) {
     val systemChars: Int get() = systemPrompt.length
     val messageChars: Int get() = messages.sumOf { it.content.length }
@@ -59,6 +62,8 @@ class PromptAssembler(
     private val conversationBuilder: ConversationBuilder,
     private val characterSelector: ActiveCharacterSelector,
     private val properties: PromptProperties,
+    /** 발동 키워드 보고용(T17). 섹션 자체는 [com.crack.prompt.keyword.KeywordBookContributor]가 만든다 */
+    private val keywordBook: KeywordBook? = null,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -101,6 +106,7 @@ class PromptAssembler(
             activeCharacters = characterSelector.select(ctx).map { it.name },
             rawWindow = window,
             rawMessageCount = raw.size,
+            activeKeywords = keywordBook?.select(ctx.storyDir, ctx.recentText)?.map { it.id }.orEmpty(),
         )
         logSizes(result)
         return result
@@ -130,9 +136,9 @@ class PromptAssembler(
         if (!log.isInfoEnabled) return
         val sections = p.sections.joinToString(", ") { "${it.slot}/${it.name}=${it.chars}" }
         log.info(
-            "프롬프트 조립 storyId={} total={} system={} messages={}개/{}자 raw(after={}, recorded={}, {}개) characters={} sections=[{}]",
+            "프롬프트 조립 storyId={} total={} system={} messages={}개/{}자 raw(after={}, recorded={}, {}개) characters={} keywords={} sections=[{}]",
             p.storyId, p.totalChars, p.systemChars, p.messages.size, p.messageChars,
-            p.rawWindow.afterTurn, p.rawWindow.recordedThroughTurn, p.rawMessageCount, p.activeCharacters, sections,
+            p.rawWindow.afterTurn, p.rawWindow.recordedThroughTurn, p.rawMessageCount, p.activeCharacters, p.activeKeywords, sections,
         )
     }
 }

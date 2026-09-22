@@ -31,6 +31,8 @@ data class PromptPreviewResponse(
     val messageChars: Int,
     val sections: List<Section>,
     val activeCharacters: List<String>,
+    /** 이번에 발동한 키워드북 항목 제목(§8.3, 우선순위 순) */
+    val activeKeywords: List<String>,
     val rawWindow: RawWindowView,
     val systemPrompt: String,
     val messages: List<Message>,
@@ -50,6 +52,7 @@ data class PromptPreviewResponse(
             messageChars = p.messageChars,
             sections = p.sections.map { Section(it.slot, it.name, it.chars, it.content) },
             activeCharacters = p.activeCharacters,
+            activeKeywords = p.activeKeywords,
             rawWindow = RawWindowView(p.rawWindow.recordedThroughTurn, p.rawWindow.afterTurn, p.rawMessageCount),
             systemPrompt = p.systemPrompt,
             messages = p.messages.map { Message(it.role, it.content) },

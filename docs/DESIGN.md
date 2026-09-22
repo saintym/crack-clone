@@ -251,7 +251,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 - BOTTOM 기여 여러 개는 빈 줄로 이어 `[지시]\n…` 블록 하나로 만든다. 마지막 메시지가 ASSISTANT(이어쓰기 등)면 `[지시]`만 담은 USER 메시지를 덧붙인다.
 - `recentText` = 이번 입력을 뺀 대화의 최근 `crack.prompt.keyword-scan-messages`(기본 6)개 메시지 + 이번 입력. 원문 범위(§6.1)와 무관하게 전체 대화에서 고른다.
 - `userInput` = 대화의 마지막 메시지가 USER면 그 내용(재생성 대상 앞까지 기준), 아니면 null.
-- 진입점: `PromptAssembler.assemble(storyId, beforeSeq?, turnInstruction?, pendingInput?)` → `AssembledPrompt(systemPrompt, messages, sections, activeCharacters, rawWindow)`. `pendingInput`은 저장하지 않은 가상 유저 입력(preview용).
+- 진입점: `PromptAssembler.assemble(storyId, beforeSeq?, turnInstruction?, pendingInput?)` → `AssembledPrompt(systemPrompt, messages, sections, activeCharacters, rawWindow, activeKeywords)`. `pendingInput`은 저장하지 않은 가상 유저 입력(preview용).
 - **기본 기여자(T13)**
 
   | slot | order | name | 내용 |
@@ -287,6 +287,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
   { storyId, totalChars, systemChars, messageChars,
     sections: [{slot, name, chars, content}],          // 조립 순서, BOTTOM 포함
     activeCharacters: ["설월"],
+    activeKeywords: ["흑풍채"],                        // 발동한 키워드북 항목 제목, 우선순위 순 (T17)
     rawWindow: {recordedThroughTurn, afterTurn, messageCount},   // afterTurn: 이 턴 초과만 넣었다
     systemPrompt, messages: [{role, content}] }         // messages는 [지시]가 붙은 최종 형태
   ```
