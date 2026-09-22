@@ -25,6 +25,7 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.context.TestConfiguration
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Primary
 import org.springframework.context.annotation.Import
 import org.springframework.test.context.ActiveProfiles
 import java.nio.file.Files
@@ -44,7 +45,8 @@ class PromptAssemblerTest {
 
     @TestConfiguration
     class PromptTestConfig {
-        @Bean fun recordedTurns() = MutableRecordedTurns()
+        // 실제 구현(StoryRecordedTurnSource)보다 우선해 테스트에서 기록 턴을 직접 조절한다.
+        @Bean @Primary fun recordedTurns() = MutableRecordedTurns()
         @Bean fun directives() = TestDirectiveContributor()
     }
 
