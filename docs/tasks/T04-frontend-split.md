@@ -1,6 +1,6 @@
 # T04 ChatPage 컴포넌트/훅 분리
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 1
 - **의존**: 없음
 - **브랜치**: `task/T04-frontend-split`
@@ -30,3 +30,6 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 작업 시작. 기준선: `npm run build` 통과, `npm run lint` 오류 6건(ChatPage.tsx:74 1건, 나머지 5건은 다른 페이지로 T00 담당).
