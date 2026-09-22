@@ -254,7 +254,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 - BOTTOM 기여 여러 개는 빈 줄로 이어 `[지시]\n…` 블록 하나로 만든다. 마지막 메시지가 ASSISTANT(이어쓰기 등)면 `[지시]`만 담은 USER 메시지를 덧붙인다.
 - `recentText` = 이번 입력을 뺀 대화의 최근 `crack.prompt.keyword-scan-messages`(기본 6)개 메시지 + 이번 입력. 원문 범위(§6.1)와 무관하게 전체 대화에서 고른다.
 - `userInput` = 대화의 마지막 메시지가 USER면 그 내용(재생성 대상 앞까지 기준), 아니면 null.
-- 진입점: `PromptAssembler.assemble(storyId, beforeSeq?, turnInstruction?, pendingInput?)` → `AssembledPrompt(systemPrompt, messages, sections, activeCharacters, rawWindow)`. `pendingInput`은 저장하지 않은 가상 유저 입력(preview용).
+- 진입점: `PromptAssembler.assemble(storyId, beforeSeq?, turnInstruction?, pendingInput?)` → `AssembledPrompt(systemPrompt, messages, sections, activeCharacters, rawWindow, activeKeywords)`. `pendingInput`은 저장하지 않은 가상 유저 입력(preview용).
 - **기본 기여자(T13)**
 
   | slot | order | name | 내용 |
@@ -290,6 +290,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
   { storyId, totalChars, systemChars, messageChars,
     sections: [{slot, name, chars, content}],          // 조립 순서, BOTTOM 포함
     activeCharacters: ["설월"],
+    activeKeywords: ["흑풍채"],                        // 발동한 키워드북 항목 제목, 우선순위 순 (T17)
     rawWindow: {recordedThroughTurn, afterTurn, messageCount},   // afterTurn: 이 턴 초과만 넣었다
     systemPrompt, messages: [{role, content}] }         // messages는 [지시]가 붙은 최종 형태
   ```
@@ -436,7 +437,16 @@ trigger(storyId, reason)
   위에 있는 항목이 우선한다.
 - **매칭:** `KeywordMatcher`(T06)가 `recentText`에서 찾는다.
 - **동시 발동 수:** 설정값 `crack.prompt.keyword-max-active`(기본 3)
-- **주입 위치:** KEYWORDS 슬롯
+- **주입 위치:** KEYWORDS 슬롯. 기여자 `prompt.keyword.KeywordBookContributor`(order 0, name `keyword_book`), 선택은 `prompt.keyword.KeywordBook`(T17).
+  ```
+  === 키워드 설정 ===
+  ### {제목}
+  {내용}
+
+  ### {제목}
+  …
+  ```
+  발동한 항목이 없거나 파일이 없으면 섹션을 생략한다. 파싱 결과는 파일 경로별로 수정 시각과 크기가 같으면 재사용한다.
 
 ### 8.4 KeywordMatcher (T06)
 ```kotlin
