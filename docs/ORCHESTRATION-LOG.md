@@ -59,3 +59,7 @@
 
 ### 라운드 2
 - **[운영] T07 시작을 T02 머지 뒤로 미룸** → T07은 ChatService를 대체하는데, T02도 ChatService의 경로 계산을 바꾸고 있었다. 먼저 시작하면 T07 쪽에 큰 rebase가 생긴다 → 미리 만든 T07 worktree를 지우고 T02 머지 후 다시 생성. 의존 관계에는 없지만 **같은 파일을 크게 바꾸는 작업은 순서를 두는 것**이 싸다.
+- **[T08] Kotlin 컴파일 오류 `Unclosed comment`** → KDoc 안의 `characters/*.md`에 있는 `/*`를 Kotlin이 중첩 주석의 시작으로 해석 → 주석 표기를 `characters/{이름}.md`로 변경. **주의:** KDoc에 glob 패턴(`/*`)을 쓰지 않는다.
+- **[T08] 로컬에서만 MockMvc 401** → worktree에 복사된 로컬 `application.yml`의 `crack.auth.password` 때문에 AuthFilter가 막음. 리모트에는 이 파일이 없어 재현되지 않는 **환경 차이**다 → 테스트에 `@SpringBootTest(properties = ["crack.auth.password="])`를 지정해 두 환경에서 같게 동작시킴. **교훈:** worktree에 로컬 설정을 복사하면 리모트와 테스트 결과가 달라질 수 있다. 통합 테스트는 영향을 주는 설정을 명시적으로 고정한다.
+- **[T08] 테스트 오판정** → 섹션이 없는지 검사하려고 "주인공(사용자)" 문자열을 찾았는데, 기본 규칙 문구에도 같은 말이 있어 오판정 → 섹션 제목(`=== 주인공(사용자) ===`)으로 검사.
+- **[T08] 남은 격리 누수 발견** → 옛 `MemoryService`가 인물 문서를 갱신할 때 시나리오 원본 `characters/`를 기준으로 읽는다. T12에서 옛 MemoryService를 삭제하므로 따로 고치지 않았다. 또 `DocumentService.characterPath`에 이름 검증이 없는 문제는 T12 범위에 추가했다.

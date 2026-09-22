@@ -382,6 +382,14 @@ class KeywordMatcher {
 | PUT | `/api/stories/{id}/documents/content?path=…` | 저장. body `{content}` |
 
 - path는 화이트리스트 패턴으로만 허용한다. `..`와 절대 경로는 거부한다.
+- **목록 항목 `{path, kind, size}`**(T08에서 확정)
+  - `kind`는 위 이름을 그대로 쓴다. 인물 파일은 `characters`다.
+  - `size`는 바이트 수다.
+  - 순서는 world → scenario → prologue → protagonist → characters(이름순) → chronicle → user_note → keywords → commands이고, 실제로 있는 파일만 나온다.
+- **GET·PUT content 응답**은 `{path, kind, content}`다. 없는 문서 GET은 404, PUT은 없던 문서도 만든다(새 인물 추가 가능).
+- `_legacy` 스토리(T09 이전 전)는 읽기만 되고 PUT은 400이다. 폴더가 곧 시나리오 원본이기 때문이다.
+- 스토리 폴더는 `StoryDirs.locate(storyId).dir`로 찾는다. 복사 로직은 `StoryFiles.initFromScenario`, 메타는 `StoryMeta`.
+- 테스트 픽스처는 `src/test/resources/fixtures/sample-scenario/`(설월·무극·주인공)이고, `SampleScenario.copyTo(dir)`로 쓴다.
 - 시나리오 원본 편집 API(`/api/scenarios/{name}/documents`)는 그대로 두고, `prologue`, `keywords`, `commands`, `images` 타입을 추가한다.
 
 ## 10. 프론트엔드 구조 (T04 이후)

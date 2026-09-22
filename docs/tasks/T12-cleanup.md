@@ -21,6 +21,7 @@ v2로 대체되었거나 쓰이지 않는 코드와 테이블을 지운다.
 - `src/main/resources/db/migration/V6__drop_unused.sql`
 - 삭제된 코드의 테스트
 - 프론트의 남은 옛 API 호출
+- **보안 보강(삭제 아님):** `DocumentService.characterPath(charName)`가 이름을 검사하지 않는다(T08 발견). `DataPaths`처럼 경로 조각 하나만 허용하도록 검증을 추가하고, 테스트를 붙인다
 
 ## 구현 내용
 1. 삭제 전에 `grep`으로 참조가 0건인지 확인하고, 확인 결과를 작업 로그에 남긴다.
