@@ -1,6 +1,6 @@
 # T19 인물 상태 패널
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 6
 - **의존**: T14, T15
 - **브랜치**: `task/T19-status-panel`
@@ -28,3 +28,7 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23 시작
+- `task/T19-status-panel` 브랜치(worktree)에서 시작. 의존 작업 T14·T15 머지 확인.
+- 병렬 작업 주의: T18(ChatInput, ChatPage 탭 등록), T21(`index.css`, 메시지 저장소·기록 읽음 처리)이 동시에 진행 중이다. 백엔드는 새 `status/**`, 프론트는 `panels/status/**`와 `api/status.ts`에 두고, `ChatPage.tsx`는 탭 등록만 고친다.
