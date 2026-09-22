@@ -1,6 +1,6 @@
 # T00 프론트 lint 기준선 복구
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 1
 - **의존**: 없음
 - **브랜치**: `task/T00-frontend-lint-baseline`
