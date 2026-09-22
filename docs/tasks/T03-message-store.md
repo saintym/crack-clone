@@ -21,6 +21,7 @@
 2. `MessageService`는 DESIGN.md §5.1 시그니처를 모두 구현한다.
    - **턴 규칙:** 유저 메시지는 새 턴을 연다. 응답은 같은 턴이고, CONTINUATION은 새 턴, PROLOGUE는 턴 0이다.
    - `appendAssistant`로 첫 응답을 저장할 때 후보 0번도 함께 만든다.
+   - `emotion`은 메시지와 후보 양쪽에 저장한다. 후보를 선택하면 메시지의 `content`와 `emotion`을 함께 동기화한다. `MessageView`에는 emotion을 넣지 않는다(DESIGN.md §5.3).
    - `addVariant` / `selectVariant`는 `content`를 선택된 후보 사본으로 동기화한다. `selectVariant`는 가장 최근 ASSISTANT에만 허용하고, 아니면 `BadRequestException`을 던진다.
    - `edit`는 `edited_at`을 갱신하고, ASSISTANT면 선택된 후보 내용도 바꾼다.
    - `truncateFrom`은 삭제한 뒤 `stories.turn_count`를 남은 최대 `turn_no`로 다시 계산하고, 등록된 `TruncateHook` 빈 전부에 `(storyId, minTruncatedTurn)`을 알린다.

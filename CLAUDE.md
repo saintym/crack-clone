@@ -7,7 +7,7 @@ AI 캐릭터 채팅 앱 "크랙(Crack)"을 클론하는 **개인용 취미 사�
 ## 먼저 읽을 문서 (이 순서로)
 1. 지정된 작업 파일 `docs/tasks/T??-*.md`: 범위, 구현 내용, 완료 조건
 2. `docs/DESIGN.md`: 작업 간 계약(스키마, API, 파일 포맷, 인터페이스). **여기 적힌 이름과 형식을 그대로 쓴다**
-3. `Plan-roadmap.md`: 결정 사항 D1~D18과 그 이유
+3. `Plan-roadmap.md`: 결정 사항 D1~D21과 그 이유
 4. 필요할 때만: `docs/tasks/README.md`(의존 관계), `Plan-crack-gap.md`(크랙 기능 조사)
 
 `Plan-crack.md`와 `Plan-features.md`는 v1 기획 문서다. 현재 기준이 아니다.

@@ -1,6 +1,6 @@
 # crack-clone v2 기술 설계
 
-> 상위 문서: [Plan-roadmap.md](../Plan-roadmap.md)의 결정 사항(D1~D18). 작업 단위는 [docs/tasks/](./tasks/README.md)를 본다.
+> 상위 문서: [Plan-roadmap.md](../Plan-roadmap.md)의 결정 사항(D1~D21). 작업 단위는 [docs/tasks/](./tasks/README.md)를 본다.
 > 이 문서는 **작업 간 계약(인터페이스, 스키마, 파일 포맷)** 을 고정하는 문서다. 병렬로 작업하는 에이전트는 여기 정의된 이름과 형식을 그대로 따른다. 계약을 바꿔야 하면 코드보다 이 문서를 먼저 고치는 PR을 올린다.
 
 ---
@@ -67,7 +67,8 @@ CREATE TABLE story_messages (
     turn_no          INT NOT NULL,                        -- 0 = 프롤로그. 유저 메시지와 그 응답은 같은 턴
     role             VARCHAR(20) NOT NULL,                -- USER | ASSISTANT
     kind             VARCHAR(20) NOT NULL DEFAULT 'NORMAL', -- NORMAL | PROLOGUE | CONTINUATION | COMMAND
-    content          TEXT NOT NULL,                       -- 현재 보이는 내용 (ASSISTANT는 선택된 후보의 사본)
+    content          TEXT NOT NULL,                       -- 현재 보이는 내용 (ASSISTANT는 선택된 후보의 사본). 감정 태그는 제거된 상태
+    emotion          VARCHAR(100),                        -- ASSISTANT만. 응답 첫 줄 [감정: …]에서 추출 (§5.3). 화면에 노출하지 않음
     selected_variant INT,                                 -- ASSISTANT만. 0부터
     edited_at        TIMESTAMP,
     created_at       TIMESTAMP DEFAULT NOW(),
@@ -80,6 +81,7 @@ CREATE TABLE message_variants (
     message_id    BIGINT NOT NULL REFERENCES story_messages(id) ON DELETE CASCADE,
     variant_index INT NOT NULL,
     content       TEXT NOT NULL,
+    emotion       VARCHAR(100),
     instruction   TEXT,                                   -- 재생성 지시 (선택)
     created_at    TIMESTAMP DEFAULT NOW(),
     UNIQUE (message_id, variant_index)
@@ -162,8 +164,8 @@ class AiGateway(registry: AiProviderRegistry) {   // 앱 코드는 모두 이것
 class MessageService {
     fun list(storyId: Long): List<MessageView>
     fun appendUser(storyId: Long, content: String, kind: MessageKind = NORMAL): StoryMessage
-    fun appendAssistant(storyId: Long, content: String, kind: MessageKind = NORMAL, turnNo: Int? = null): StoryMessage
-    fun addVariant(messageId: Long, content: String, instruction: String?): StoryMessage  // 새 후보를 추가하고 선택
+    fun appendAssistant(storyId: Long, content: String, emotion: String? = null, kind: MessageKind = NORMAL, turnNo: Int? = null): StoryMessage
+    fun addVariant(messageId: Long, content: String, emotion: String?, instruction: String?): StoryMessage  // 새 후보를 추가하고 선택
     fun selectVariant(messageId: Long, index: Int): StoryMessage                          // 가장 최근 ASSISTANT만 허용
     fun edit(messageId: Long, content: String): StoryMessage   // 역할 무관. ASSISTANT면 선택된 후보 내용도 갱신
     fun truncateFrom(messageId: Long): TruncateResult          // 해당 메시지와 그 뒤를 전부 삭제. 잘린 최소 turn_no를 반환
@@ -189,7 +191,7 @@ class MessageService {
 | DELETE | `/messages/{id}` | 이 메시지부터 끝까지 삭제 |
 | GET | `/messages/export` | 마크다운 내보내기 (`text/markdown`) |
 
-`MessageView = {id, seq, turn, role, kind, content, variantIndex, variantCount, edited, createdAt}`
+`MessageView = {id, seq, turn, role, kind, content, variantIndex, variantCount, edited, createdAt}`. `emotion`은 **넣지 않는다**(§5.3).
 
 **SSE 이벤트:** `user`(저장된 유저 MessageView JSON), `delta`(텍스트), `done`(저장된 ASSISTANT MessageView JSON), `error`(메시지)
 
@@ -198,6 +200,17 @@ class MessageService {
 - **스토리별 동시 생성 금지.** 생성 중이면 409를 돌려준다(`StoryGenerationLock`).
 - **저장 후 훅.** ASSISTANT를 저장한 뒤 `AfterTurnHook` 빈들을 호출한다. T14가 여기에 10턴 트리거를 건다.
 - 기존 `/chat/*` 경로는 T11이 프론트를 옮긴 뒤 T12에서 삭제한다. T07은 새 경로만 추가하고 기존 경로는 그대로 둔다.
+- **재생성은 가장 최근 ASSISTANT 메시지만** 대상으로 한다(D17). 과거 메시지 재생성 요청은 400을 돌려준다.
+
+### 5.3 감정 태그 (D19)
+AI는 응답 첫 줄에 `[감정: 경계심, 호기심]`을 쓴다. 이 태그는 출력 품질과 이미지 선택(T20)을 돕는 **내부 신호**다. **사용자에게는 절대 보이지 않는다.**
+- **스트림 필터 `EmotionTagFilter`(T07):**
+  - 응답 시작부를 첫 줄바꿈까지(최대 200자) 버퍼링한다.
+  - `^\[\s*감정\s*:\s*(.+?)\]\s*$` 형식에 맞으면 태그를 떼어 내고 감정 값만 기록한다. 맞지 않으면 버퍼를 그대로 흘린다.
+  - 그래서 `delta` 이벤트에 태그가 절대 실리지 않는다.
+- **저장:** `content`에는 태그를 뺀 본문을 넣고, `emotion` 칼럼에 감정 값을 넣는다.
+- **AI 입력:** 대화 기록으로 넘기는 과거 응답은 태그가 빠진 `content`다(토큰 절약). 태그 출력 규칙은 시스템 프롬프트(BASE)가 매번 요구한다.
+- **프론트:** 받은 내용을 그대로 렌더링한다. 방어용으로, 첫 줄이 감정 태그면 숨기는 처리를 한 번 더 둔다(T11).
 
 ## 6. 프롬프트 조립 (T08 격리, T13 v2)
 

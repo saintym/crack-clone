@@ -16,7 +16,7 @@ v2로 대체되었거나 쓰이지 않는 코드와 테이블을 지운다.
 - `memory/service/MemoryService.kt`, `memory/service/StorySummaryService.kt`, `memory/entity/**`, `memory/repository/**`, 옛 `memory/controller`(must-remember → 스토리 문서 API로 대체)
   - `memory/docs/**`(T05)는 **유지**
 - `chat/entity/ChatMessage.kt`, `chat/repository/**`, `chat/service/ChatFileService.kt`, 옛 `chat/controller/ChatController.kt`(`/chat/*`)
-- `chat/service/MessageParser.kt`와 `/parse`: 프론트가 쓰지 않는다. 감정 태그 처리는 프롬프트 규칙으로만 유지
+- `chat/service/MessageParser.kt`와 `/parse`: 프론트가 쓰지 않는다. 감정 태그는 T07의 `EmotionTagFilter`가 처리한다
 - `PromptAssembler.loadConversationContext`와 요약 로딩
 - `src/main/resources/db/migration/V6__drop_unused.sql`
 - 삭제된 코드의 테스트
