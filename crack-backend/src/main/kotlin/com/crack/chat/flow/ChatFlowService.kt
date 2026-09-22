@@ -7,6 +7,8 @@ import com.crack.ai.service.AiGateway
 import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
+import com.crack.memory.record.MemoryRecordService
+import com.crack.memory.record.MemoryStatusView
 import com.crack.message.dto.MessageView
 import com.crack.message.dto.TruncateResult
 import com.crack.message.entity.MessageKind
@@ -46,6 +48,7 @@ class ChatFlowService(
     private val aiGateway: AiGateway,
     private val generationLock: StoryGenerationLock,
     private val afterTurnHooks: ObjectProvider<AfterTurnHook>,
+    private val memoryRecordService: MemoryRecordService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -59,6 +62,7 @@ class ChatFlowService(
                 turnCount = story.turnCount,
                 recordedThroughTurn = story.recordedThroughTurn,
                 generating = generationLock.isLocked(storyId),
+                memory = memoryRecordService.status(storyId),
             ),
             messages = messages,
         )
@@ -270,4 +274,6 @@ data class StoryChatInfo(
     /** 기억 기록이 반영된 마지막 턴 (`stories.recorded_through_turn`) */
     val recordedThroughTurn: Int,
     val generating: Boolean,
+    /** 기억 기록 뱃지 상태 (T14, DESIGN.md §7.2) */
+    val memory: MemoryStatusView = MemoryStatusView.NONE,
 )
