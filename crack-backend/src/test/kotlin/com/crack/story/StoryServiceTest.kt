@@ -249,27 +249,4 @@ class StoryServiceTest {
         assertTrue(Files.exists(scenarioDir.resolve("world.md")), "시나리오 원본은 지워지면 안 된다")
         verify(storyRepository).delete(story)
     }
-
-    @Test
-    fun `분기 시 원본 스토리 폴더에서 읽고 새 스토리 폴더를 만든다`() {
-        // given
-        val sourceDir = tempDir.resolve("test/stories/1700000000000")
-        Files.createDirectories(sourceDir.resolve("chat"))
-        Files.writeString(sourceDir.resolve("chat/chat_latest.md"), "# 최근 대화\n\n## USER\n안녕\n")
-
-        val source = Story(id = 1L, scenarioId = 1L, title = "원본", dirName = "1700000000000")
-        whenever(storyRepository.findById(1L)).thenReturn(Optional.of(source))
-        whenever(scenarioRepository.findById(1L)).thenReturn(Optional.of(Scenario(id = 1L, name = "test", title = "Test")))
-        whenever(storyRepository.save(any<Story>())).thenAnswer { it.getArgument<Story>(0) }
-
-        // when
-        storyService.branch(1L, 0, "분기")
-
-        // then: 새 폴더는 같은 시나리오의 stories/ 아래에 만들어지고, 원본 폴더는 그대로다
-        verify(storyRepository).save(argThat<Story> {
-            val dir = tempDir.resolve("test/stories").resolve(dirName)
-            dirName != source.dirName && Files.exists(dir.resolve("chat/chat_latest.md"))
-        })
-        assertTrue(Files.readString(sourceDir.resolve("chat/chat_latest.md")).contains("안녕"))
-    }
 }

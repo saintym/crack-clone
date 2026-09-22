@@ -93,39 +93,7 @@ class StoryService(
         storyRepository.delete(story)
     }
 
-    @Transactional
-    fun branch(storyId: Long, messageIndex: Int, title: String): StoryResponse {
-        val sourceStory = storyRepository.findById(storyId)
-            .orElseThrow { NotFoundException("스토리를 찾을 수 없습니다: $storyId") }
-
-        val scenario = scenarioRepository.findById(sourceStory.scenarioId)
-            .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다: ${sourceStory.scenarioId}") }
-
-        // Parse source messages and take up to messageIndex (inclusive)
-        val sourcePath = dataPaths.storyDir(scenario.name, sourceStory.dirName)
-        val allMessages = chatFileService.parseMessages(sourcePath)
-        val branchMessages = allMessages.subList(0, minOf(messageIndex + 1, allMessages.size))
-
-        // Create new story (T09가 스토리 폴더 복사 방식으로 바꾸기 전까지는 원본에서 새로 복사한다)
-        val dirName = newDirName(scenario.name)
-        val storyDataPath = createStoryDirectory(scenario.name, dirName)
-
-        val story = withCleanupOnFailure(scenario.name, storyDataPath) {
-            // Write branched messages
-            chatFileService.writeMessages(storyDataPath, branchMessages)
-
-            val turnCount = branchMessages.count { it.role == "assistant" }
-            storyRepository.save(
-                Story(
-                    scenarioId = sourceStory.scenarioId,
-                    title = title,
-                    dirName = dirName,
-                    turnCount = turnCount
-                )
-            )
-        }
-        return StoryResponse.from(story)
-    }
+    // 분기는 StoryBranchService(T09)로 옮겼다. 스토리 폴더 복사 + DB 메시지 복사.
 
     /** 새 스토리 폴더 이름: 생성 시각 밀리초 (DESIGN.md §2). 같은 밀리초에 폴더가 이미 있으면 1씩 올린다. */
     private fun newDirName(scenarioName: String): String {
