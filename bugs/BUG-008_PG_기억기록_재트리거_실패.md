@@ -1,6 +1,6 @@
 # BUG-008: PostgreSQL에서 첫 기록 이후 기억 기록이 모두 실패
 
-## 상태: 수정 예정 (T21)
+## 상태: 수정완료 (T21, 2026-09-23)
 ## 심각도: 높음 — 핵심 기능(기억)이 첫 기록 이후 멈춤
 
 ## 증상
@@ -14,3 +14,8 @@
 
 ## 수정 방향
 `since` 유무에 따라 쿼리를 둘로 나누거나 타입을 명시한다. 실제 PostgreSQL에서 두 번째 기록까지 도는지 확인한다.
+
+## 수정 (T21)
+- `findEditedTurns`(since 없음)와 `findEditedTurnsSince`(since 비교)로 쿼리를 나누고, `MessageService.editedTurnsSince`가 `since` 유무로 고른다.
+- 회귀 테스트 `EditedTurnsQueryTest`: H2로는 재현되지 않아 ① 분기 호출 ② 모든 저장소 `@Query`에 `:파라미터 IS [NOT] NULL` 패턴이 없는지를 검사한다.
+- 실제 PostgreSQL 14(임시 클러스터)에서 자동 기록 3회 연속 DONE(두 번째는 수정한 턴 3을 재반영), 재반영만 있는 기록 DONE, 기록할 것이 없을 때 `NOTHING_TO_RECORD`(200)를 확인했다.

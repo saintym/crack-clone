@@ -205,7 +205,11 @@ class MessageService(
      */
     fun editedTurnsSince(storyId: Long, throughTurn: Int, since: LocalDateTime?): List<Int> {
         if (throughTurn < 1) return emptyList()
-        return messageRepository.findEditedTurns(storyId, 1, throughTurn, since)
+        return if (since == null) {
+            messageRepository.findEditedTurns(storyId, 1, throughTurn)
+        } else {
+            messageRepository.findEditedTurnsSince(storyId, 1, throughTurn, since)
+        }
     }
 
     // ---- 내부 ----

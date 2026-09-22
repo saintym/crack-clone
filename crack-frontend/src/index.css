@@ -22,25 +22,31 @@
   --color-success: #34d469;
 }
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/*
+ * 전역 리셋과 기본 스타일은 base 레이어에 둔다. 레이어 밖 규칙은 레이어 안 규칙(Tailwind 유틸리티 포함)을
+ * 항상 이기므로, 밖에 두면 p-*, m-* 같은 여백 유틸리티가 무력화된다(BUG-010).
+ */
+@layer base {
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
 
-html, body, #root {
-  height: 100%;
-  width: 100%;
-  overflow: hidden;
-}
+  html, body, #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  background-color: var(--color-bg-primary);
-  color: var(--color-text-primary);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  -webkit-tap-highlight-color: transparent;
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+    background-color: var(--color-bg-primary);
+    color: var(--color-text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -54,11 +60,18 @@ body {
   border-radius: 3px;
 }
 
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-.safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
+/*
+ * 안전 영역 여백도 레이어 밖에 두면 같은 요소의 py-*, pb-8 같은 유틸리티를 덮어 여백이 0이 된다(BUG-010).
+ * components 레이어에 두어 유틸리티가 이기게 한다. index.html에 viewport-fit=cover가 없어 inset은 항상 0이다.
+ * cover를 쓰게 되면 요소별 여백과 inset을 더하는 방식(calc)으로 다시 설계한다.
+ */
+@layer components {
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
 }
 
 /* Chat markdown styles */
