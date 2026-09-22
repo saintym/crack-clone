@@ -8,7 +8,7 @@ AI 캐릭터 채팅 앱 "크랙(Crack)"을 클론하는 **개인용 취미 사�
 1. 지정된 작업 파일 `docs/tasks/T??-*.md`: 범위, 구현 내용, 완료 조건
 2. `docs/DESIGN.md`: 작업 간 계약(스키마, API, 파일 포맷, 인터페이스). **여기 적힌 이름과 형식을 그대로 쓴다**
 3. `Plan-roadmap.md`: 결정 사항 D1~D21과 그 이유
-4. 필요할 때만: `docs/tasks/README.md`(의존 관계), `Plan-crack-gap.md`(크랙 기능 조사)
+4. 필요할 때만: `docs/tasks/README.md`(의존 관계), `docs/PARALLEL.md`(병렬 운영과 머지 방식), `Plan-crack-gap.md`(크랙 기능 조사)
 
 `Plan-crack.md`와 `Plan-features.md`는 v1 기획 문서다. 현재 기준이 아니다.
 
@@ -16,7 +16,7 @@ AI 캐릭터 채팅 앱 "크랙(Crack)"을 클론하는 **개인용 취미 사�
 - `crack-backend/`: Spring Boot 3.4 + Kotlin 1.9, JDK 17, PostgreSQL(Flyway), 테스트는 H2
 - `crack-frontend/`: React 19 + TypeScript + Vite + Tailwind v4
 - `data/`: 시나리오 데이터. **git에는 `data/_templates/`만 있다.** 사용자의 실제 데이터는 로컬에만 있다
-- `docs/`: 설계와 작업 보드 · `bugs/`: 버그 기록 · `blog/`: 개발기(포트폴리오용)
+- `docs/`: 설계와 작업 보드 · `scripts/task-worktree.sh`: 로컬 병렬 작업용 worktree 관리 · `bugs/`: 버그 기록 · `blog/`: 개발기(포트폴리오용)
 
 ## 명령어
 ```bash
@@ -44,6 +44,7 @@ cd crack-frontend && npm ci && npm run build && npm run lint
    - 시작할 때: `- **상태**: IN_PROGRESS` + 작업 로그에 시작 기록
    - PR을 올릴 때: `REVIEW`
    - 막혔을 때: `BLOCKED` + 이유
+   - `DONE`은 머지한 사람이 main에서 바꾼다. 작업 세션은 `DONE`으로 바꾸지 않는다.
    - `docs/tasks/README.md`와 다른 작업 파일의 상태는 고치지 않는다.
 5. **작업 로그**(작업 파일 맨 아래)에 날짜별로 남길 것:
    - 한 일

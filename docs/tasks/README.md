@@ -1,6 +1,6 @@
 # 작업 보드
 
-> 설계: [docs/DESIGN.md](../DESIGN.md) · 결정 사항: [Plan-roadmap.md](../../Plan-roadmap.md) · 에이전트 규칙: [CLAUDE.md](../../CLAUDE.md)
+> 설계: [docs/DESIGN.md](../DESIGN.md) · 병렬 운영(worktree, 일정, 머지): [docs/PARALLEL.md](../PARALLEL.md) · 결정 사항: [Plan-roadmap.md](../../Plan-roadmap.md) · 에이전트 규칙: [CLAUDE.md](../../CLAUDE.md)
 
 ## 진행 방식
 - 작업 하나 = 브랜치 하나 = PR 하나. 브랜치 이름은 각 작업 파일에 적혀 있다.
@@ -11,6 +11,8 @@
   grep -H '^- \*\*상태\*\*' docs/tasks/T*.md
   ```
 - 상태 값: `TODO` → `IN_PROGRESS` → `REVIEW`(PR 올림) → `DONE`(main에 머지됨). 막히면 `BLOCKED`와 이유를 적는다.
+- `IN_PROGRESS`, `REVIEW`, `BLOCKED`는 작업 세션이 자기 브랜치에서 바꾼다. **`DONE`은 머지한 사람이 main에서** 바꾼다(docs/PARALLEL.md §7.2).
+- 상태만 빠르게 보기: `scripts/task-worktree.sh status`
 - **의존 작업이 `DONE`이 아니면 시작하지 않는다.** 의존 작업이 main에 머지된 뒤에 브랜치를 딴다.
 
 ## 웨이브와 의존 관계
