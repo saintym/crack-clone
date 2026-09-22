@@ -1,161 +1,146 @@
-import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
-import { chatApi } from '../api/chat';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ChatApiError, chatApi, isAbort, isConflict,
+  type StreamHandlers, type StreamResult,
+} from '../api/chat';
 import type { Message } from '../types/chat';
 
-/** 이어하기 때 화면에만 끼워 넣는 사용자 메시지 */
-const CONTINUE_USER_MESSAGE = '계속 이어서 작성해주세요.';
+export type StreamMode = 'send' | 'regenerate' | 'continue';
 
-/**
- * fetch 기반 SSE 스트림을 읽어 delta를 누적한다.
- * 백엔드 SSE는 여러 줄 데이터를 `data:` 줄 여러 개로 쪼개 보내므로 같은 이벤트 안의 줄은 개행으로 다시 잇는다.
- * @returns 누적한 delta 내용. delta가 비었으면 done 이벤트 데이터
- */
-async function streamSSE(url: string, body: object, onDelta: (content: string) => void): Promise<string> {
-  const token = localStorage.getItem('crack-token');
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (!response.ok) throw new Error('Stream failed');
-
-  const reader = response.body?.getReader();
-  const decoder = new TextDecoder();
-  let fullResponse = '';
-  let doneData = '';
-  let buffer = '';
-
-  while (reader) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() || '';
-
-    let currentEvent = '';
-    let deltaLineCount = 0;
-    for (const line of lines) {
-      if (line.startsWith('event:')) {
-        currentEvent = line.slice(6).trim();
-        deltaLineCount = 0;
-      } else if (line.startsWith('data:')) {
-        const data = line.slice(5);
-        if (currentEvent === 'delta') {
-          // SSE splits multiline data into multiple data: lines
-          // Restore newlines between them
-          if (deltaLineCount > 0) fullResponse += '\n';
-          fullResponse += data;
-          deltaLineCount++;
-          onDelta(fullResponse);
-        } else if (currentEvent === 'done') {
-          // Accumulate done data (may span multiple data: lines)
-          doneData += (doneData ? '\n' : '') + data;
-        }
-        // Don't reset currentEvent — SSE events can have multiple data: lines
-      } else if (line.trim() === '') {
-        // Empty line marks end of SSE event
-        currentEvent = '';
-        deltaLineCount = 0;
-      }
-    }
-  }
-
-  // Use accumulated delta content; fall back to done data if deltas were empty
-  return fullResponse || doneData;
+/** 진행 중인 스트림. 화면(MessageList)은 이것으로 스트리밍 말풍선 위치를 정한다 */
+export interface StreamState {
+  storyId: number;
+  mode: StreamMode;
+  /** 재생성 대상 AI 메시지. 스트리밍하는 동안 이 메시지 자리에 새 응답을 보인다. 실패하면 원래 답변이 다시 보인다 */
+  targetId?: number;
+  /** 전송만: 서버가 `user` 이벤트로 저장을 알리기 전까지 보일 유저 메시지 */
+  pendingUser?: string;
+  /** 지금까지 받은 delta */
+  content: string;
 }
 
 interface UseChatStreamOptions {
   storyId: number;
   /** 선택한 AI 프로바이더. 빈 문자열이면 서버 기본값 */
   provider: string;
-  setMessages: Dispatch<SetStateAction<Message[]>>;
-  /** 서버 히스토리로 메시지 목록을 다시 채운다 (재생성 실패 시 복구용) */
-  reloadHistory: () => Promise<unknown>;
-  /** 턴이 끝났을 때 호출 (스토리 목록 새로고침) */
+  /** 서버가 저장한 메시지(`user`, `done`)를 목록에 반영한다 */
+  onMessage: (storyId: number, message: Message) => void;
+  /** 409: 서버가 이미 생성 중이다 */
+  onConflict: (storyId: number) => void;
+  /** done/error 없이 연결이 끊겼다. 서버는 생성·저장을 계속하므로 목록을 다시 받는다 */
+  onInterrupted: (storyId: number) => void;
+  /** 턴 수가 바뀌었을 수 있다 (스토리 목록 새로고침) */
   onTurnEnd: () => void;
 }
 
-/** 전송·재생성·이어하기 스트리밍과 complete 호출 */
-export function useChatStream({ storyId, provider, setMessages, reloadHistory, onTurnEnd }: UseChatStreamOptions) {
-  const [streaming, setStreaming] = useState(false);
-  const [streamContent, setStreamContent] = useState('');
+/**
+ * 전송·재생성·이어쓰기 SSE (DESIGN.md §5.2). 서버가 저장하므로 클라이언트는 `done`의 메시지로 목록을 교체하기만 한다.
+ * 스토리를 옮기거나 화면을 떠나면 읽기만 멈춘다(서버는 생성·저장을 끝까지 한다).
+ */
+export function useChatStream({ storyId, provider, onMessage, onConflict, onInterrupted, onTurnEnd }: UseChatStreamOptions) {
+  const [stream, setStream] = useState<StreamState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const sessionRef = useRef<AbortController | null>(null);
+  const runningRef = useRef(false);
+
+  // 스토리마다 중단 신호 하나. 스토리가 바뀌거나 화면을 떠나면 진행 중인 스트림 읽기를 멈춘다.
+  useEffect(() => {
+    const controller = new AbortController();
+    sessionRef.current = controller;
+    return () => controller.abort();
+  }, [storyId]);
 
   /**
-   * 스트림 하나를 끝까지 받아 메시지 목록에 반영하고 complete를 호출한다.
-   * 호출 전에 streaming=true, streamContent=''로 만들어 두어야 한다.
+   * 스트림 하나를 끝까지 받는다.
+   * @returns 전송에서 유저 메시지가 저장되었는지 (입력창 내용 복구 판단용)
    */
-  const runStream = useCallback(async (
-    url: string,
-    message: string,
-    append: (fullResponse: string) => Message[],
-    errorLabel: string,
-    onError?: () => void,
-  ) => {
+  const run = useCallback(async (
+    init: Omit<StreamState, 'storyId' | 'content'>,
+    call: (handlers: StreamHandlers, signal?: AbortSignal) => Promise<StreamResult>,
+  ): Promise<boolean> => {
+    if (runningRef.current || !storyId) return false;
+    runningRef.current = true;
+    const sid = storyId;
+    let userSaved = false;
+    setError(null);
+    setStream({ ...init, storyId: sid, content: '' });
+
     try {
-      const fullResponse = await streamSSE(url, {
-        message,
-        ...(provider ? { provider } : {}),
-      }, setStreamContent);
+      const result = await call({
+        onUser: (message) => {
+          userSaved = true;
+          onMessage(sid, message);
+          setStream((s) => (s ? { ...s, pendingUser: undefined } : s));
+        },
+        onDelta: (text) => setStream((s) => (s ? { ...s, content: s.content + text } : s)),
+      }, sessionRef.current?.signal);
 
-      setStreamContent('');
-      if (fullResponse.trim()) {
-        setMessages((prev) => [...prev, ...append(fullResponse)]);
-        await chatApi.complete(storyId, fullResponse);
+      if (result.type === 'done') {
+        onMessage(sid, result.message);
+        onTurnEnd();
+      } else if (result.type === 'error') {
+        setError(`응답을 생성하지 못했습니다: ${result.message}`);
+        if (userSaved) onTurnEnd();
+      } else {
+        onInterrupted(sid);
       }
-      onTurnEnd();
     } catch (err) {
-      console.error(errorLabel, err);
-      setStreamContent('');
-      onError?.();
+      if (isAbort(err)) {
+        // 스토리를 옮겼거나 화면을 떠났다. 서버는 계속 생성한다.
+      } else if (isConflict(err)) {
+        onConflict(sid);
+      } else if (err instanceof ChatApiError) {
+        setError(err.message);
+      } else {
+        console.error('Stream error:', err);
+        setError('연결이 끊겼습니다. 서버에서 생성이 끝나면 목록에 반영됩니다.');
+        onInterrupted(sid);
+      }
     } finally {
-      setStreaming(false);
+      runningRef.current = false;
+      setStream(null);
     }
-  }, [storyId, provider, setMessages, onTurnEnd]);
+    return userSaved;
+  }, [storyId, onMessage, onConflict, onInterrupted, onTurnEnd]);
 
-  /** 사용자 메시지(상황서술 변환까지 끝난 것)를 보내고 응답을 스트리밍한다. */
-  const send = useCallback(async (userMsg: string) => {
-    if (streaming || !storyId) return;
-    setMessages((prev) => [...prev, { role: 'user', content: userMsg }]);
-    setStreaming(true);
-    setStreamContent('');
+  const providerBody = useCallback(() => (provider ? { provider } : {}), [provider]);
 
-    await runStream(chatApi.streamUrl(storyId), userMsg,
-      (full) => [{ role: 'assistant', content: full }], 'Chat error:');
-  }, [streaming, storyId, setMessages, runStream]);
+  /**
+   * 유저 메시지(상황서술 변환까지 끝난 것)를 보내고 응답을 받는다.
+   * @returns 유저 메시지가 저장되었으면 true. false면 입력창에 내용을 되돌린다
+   */
+  const send = useCallback((content: string) =>
+    run({ mode: 'send', pendingUser: content },
+      (handlers, signal) => chatApi.send(storyId, { content, ...providerBody() }, handlers, signal)),
+  [run, storyId, providerBody]);
 
-  /** 마지막 AI 메시지를 지우고 다시 생성한다. 실패하면 서버 히스토리로 복구한다. */
-  const regenerate = useCallback(async (messageIndex: number) => {
-    if (streaming || !storyId) return;
-    setStreaming(true);
-    setStreamContent('');
+  /**
+   * 대화의 마지막 메시지를 대상으로 재생성한다.
+   * AI 메시지면 후보를 추가하고, 유저 메시지(응답 실패)면 그 턴의 첫 응답을 만든다. 실패하면 원래 답변은 그대로다.
+   */
+  const regenerate = useCallback((target: Message, instruction?: string) => {
+    const trimmed = instruction?.trim();
+    return run({ mode: 'regenerate', targetId: target.role === 'ASSISTANT' ? target.id : undefined },
+      (handlers, signal) => chatApi.regenerate(storyId, {
+        ...providerBody(),
+        messageId: target.id,
+        ...(trimmed ? { instruction: trimmed } : {}),
+      }, handlers, signal));
+  }, [run, storyId, providerBody]);
 
-    // Remove the assistant message from UI
-    setMessages((prev) => prev.filter((_, i) => i !== messageIndex));
+  /** 유저 메시지 없이 이어쓴다 */
+  const continueStory = useCallback(() =>
+    run({ mode: 'continue' },
+      (handlers, signal) => chatApi.continueStory(storyId, providerBody(), handlers, signal)),
+  [run, storyId, providerBody]);
 
-    await runStream(chatApi.regenerateUrl(storyId), '',
-      (full) => [{ role: 'assistant', content: full }], 'Regenerate error:',
-      // Reload history to restore consistent state
-      () => { reloadHistory(); });
-  }, [streaming, storyId, setMessages, runStream, reloadHistory]);
+  const clearError = useCallback(() => setError(null), []);
+  const current = stream?.storyId === storyId ? stream : null;
 
-  /** 마지막 AI 메시지를 이어서 쓴다. */
-  const continueStory = useCallback(async () => {
-    if (streaming || !storyId) return;
-    setStreaming(true);
-    setStreamContent('');
-
-    // Add the hidden "계속" user message + new assistant response
-    await runStream(chatApi.continueUrl(storyId), '',
-      (full) => [
-        { role: 'user', content: CONTINUE_USER_MESSAGE },
-        { role: 'assistant', content: full },
-      ], 'Continue error:');
-  }, [streaming, storyId, runStream]);
-
-  return { streaming, streamContent, send, regenerate, continueStory };
+  return {
+    stream: current,
+    streaming: current !== null,
+    error, clearError,
+    send, regenerate, continueStory,
+  };
 }

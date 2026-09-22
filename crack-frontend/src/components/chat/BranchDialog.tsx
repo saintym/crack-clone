@@ -3,6 +3,8 @@ import { useState } from 'react';
 interface BranchDialogProps {
   /** 열릴 때 입력창에 채울 제목 */
   initialTitle: string;
+  /** 분기 실패 문구 (예: 이전되지 않은 옛 스토리는 400) */
+  error?: string;
   onCancel: () => void;
   onConfirm: (title: string) => void;
 }
@@ -11,7 +13,7 @@ interface BranchDialogProps {
  * 스토리 분기 하단 시트. 사용자가 메뉴에서 직접 연 경우에만 뜬다.
  * 열릴 때마다 새로 마운트되므로 제목은 매번 initialTitle에서 시작한다.
  */
-export default function BranchDialog({ initialTitle, onCancel, onConfirm }: BranchDialogProps) {
+export default function BranchDialog({ initialTitle, error, onCancel, onConfirm }: BranchDialogProps) {
   const [branchTitle, setBranchTitle] = useState(initialTitle);
 
   return (
@@ -22,7 +24,7 @@ export default function BranchDialog({ initialTitle, onCancel, onConfirm }: Bran
       >
         <div className="w-10 h-1 bg-border-light/50 rounded-full mx-auto mb-6" />
         <h2 className="text-lg font-semibold text-text-primary mb-2">스토리 분기</h2>
-        <p className="text-sm text-text-muted mb-5">현재 메시지까지의 내용으로 새로운 스토리를 만듭니다.</p>
+        <p className="text-sm text-text-muted mb-5">이 메시지까지의 내용으로 새로운 스토리를 만듭니다.</p>
         <input
           type="text"
           value={branchTitle}
@@ -32,6 +34,7 @@ export default function BranchDialog({ initialTitle, onCancel, onConfirm }: Bran
           onKeyDown={(e) => e.key === 'Enter' && onConfirm(branchTitle)}
           className="w-full px-5 py-4 bg-surface border border-border rounded-2xl text-text-primary placeholder-text-muted focus:outline-none focus:border-accent/60 transition-all text-[15px]"
         />
+        {error && <p className="text-sm text-danger mt-3">{error}</p>}
         <div className="flex gap-3 mt-5">
           <button
             onClick={onCancel}
