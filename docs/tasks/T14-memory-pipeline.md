@@ -1,6 +1,6 @@
 # T14 기억 기록 파이프라인
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 4
 - **의존**: T01, T05, T07, T08
 - **브랜치**: `task/T14-memory-pipeline`
@@ -49,3 +49,7 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23 시작
+- `task/T14-memory-pipeline` 브랜치에서 시작. 의존 작업 T01·T05·T07·T08(+T09) 머지 확인.
+- 병렬 작업 주의: T13(prompt, ConversationBuilder)과 T11(프론트)이 동시에 진행 중이다. prompt 패키지와 ConversationBuilder는 건드리지 않는다.
