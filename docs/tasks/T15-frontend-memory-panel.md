@@ -1,6 +1,6 @@
 # T15 기억 패널
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 4
 - **의존**: T11, T14
 - **브랜치**: `task/T15-frontend-memory-panel`
