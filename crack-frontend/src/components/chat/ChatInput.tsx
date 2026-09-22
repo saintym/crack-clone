@@ -113,6 +113,7 @@ export default function ChatInput({
     if (inputRef.current?.value) return;
     setInput(text);
     setNarrationMode(narration);
+    setPaletteClosed(true); // 되돌린 `/명령`에 자동완성이 다시 떠서 오류 토스트를 가리지 않게
   };
 
   const pick = (command: CommandInfo) => {
@@ -217,9 +218,10 @@ export default function ChatInput({
     }
   };
 
-  let placeholder = narrationMode ? '상황을 서술하세요...' : '메시지를 입력하세요 (/: 명령)';
-  if (locked) placeholder = streaming ? '응답을 받는 중...' : '응답을 생성하는 중입니다...';
-  else if (canContinue && !narrationMode) placeholder = '메시지를 입력하세요 (빈 채로 Enter: 이어쓰기)';
+  // 모바일 폭(420px 이하)에서도 한 줄에 들어가게 짧게 쓴다. 넘치면 말줄임(placeholder:truncate)
+  let placeholder = narrationMode ? '상황을 서술하세요' : '메시지 · / 명령';
+  if (locked) placeholder = streaming ? '응답을 받는 중…' : '응답을 생성하는 중…';
+  else if (canContinue && !narrationMode) placeholder = '메시지 · 빈 Enter: 이어쓰기';
 
   return (
     <div className="safe-bottom shrink-0 border-t border-border/50 bg-bg-secondary/80 backdrop-blur-md px-4 py-3">
@@ -283,7 +285,7 @@ export default function ChatInput({
           aria-controls={paletteOpen ? 'command-palette' : undefined}
           aria-activedescendant={paletteOpen ? commandOptionId(active) : undefined}
           aria-autocomplete="list"
-          className={`flex-1 px-4 py-2.5 bg-surface border rounded-2xl text-text-primary placeholder-text-muted resize-none focus:outline-none transition-all text-[15px] ${
+          className={`flex-1 px-4 py-2.5 bg-surface border rounded-2xl text-text-primary placeholder-text-muted resize-none placeholder:truncate focus:outline-none transition-all text-[15px] ${
             narrationMode
               ? 'border-accent/60 italic'
               : 'border-border/60 focus:border-accent/60'
