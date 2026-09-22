@@ -43,6 +43,13 @@ crack:
         haiku: haiku
     fake:
       enabled: false
+  prompt:              # 프롬프트 조립 (T13, T17)
+    keyword-scan-messages: 6   # 인물·키워드 매칭에 쓰는 최근 메시지 수(+ 이번 입력)
+    overlap-turns: 2           # 마지막 기록 턴과 겹쳐 넣는 원문 턴 수
+    max-raw-turns: 30          # 원문 상한(최근 턴 수)
+    keyword-max-active: 3      # 키워드북 동시 발동 수. 0이면 끔
+  image:
+    prompt-max-entries: 50     # 프롬프트에 넣는 이미지 태그 수 상한
   memory:
     budget:            # 기억 문서 예산(글자 수). 넘으면 기록 때 압축한다
       character: 3000
