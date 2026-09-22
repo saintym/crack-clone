@@ -1,6 +1,6 @@
 # T20 이미지 카탈로그
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 6
 - **의존**: T11, T13
 - **브랜치**: `task/T20-image-catalog`
@@ -30,3 +30,6 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 시작. 브랜치 `task/T20-image-catalog`(worktree)에서 진행.
