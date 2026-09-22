@@ -1,10 +1,10 @@
 package com.crack.memory.service
 
+import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
 import com.crack.ai.dto.ChatMessage
 import com.crack.ai.dto.MessageRole
-import com.crack.ai.dto.ModelTier
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.memory.entity.StorySummary
 import com.crack.memory.entity.SummaryLevel
 import com.crack.memory.repository.StorySummaryRepository
@@ -15,7 +15,7 @@ import org.springframework.transaction.annotation.Transactional
 @Service
 class StorySummaryService(
     private val storySummaryRepository: StorySummaryRepository,
-    private val claudeService: ClaudeService
+    private val aiGateway: AiGateway
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -131,9 +131,9 @@ class StorySummaryService(
             systemPrompt = CONSOLIDATION_PROMPT,
             messages = listOf(ChatMessage(MessageRole.USER, combinedContent)),
             maxTokens = 1024,
-            modelTier = ModelTier.SONNET
+            purpose = AiPurpose.RECORD
         )
-        return claudeService.chat(request)
+        return aiGateway.chat(request)
     }
 
 }

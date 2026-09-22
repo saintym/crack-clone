@@ -1,6 +1,6 @@
 package com.crack.memory
 
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.chat.service.ChatFileService
 import com.crack.memory.service.MemoryService
 import com.crack.memory.service.StorySummaryService
@@ -18,7 +18,7 @@ import java.util.*
 class MemoryServiceTest {
 
     private lateinit var memoryService: MemoryService
-    private lateinit var claudeService: ClaudeService
+    private lateinit var aiGateway: AiGateway
     private lateinit var chatFileService: ChatFileService
     private lateinit var scenarioRepository: ScenarioRepository
     private lateinit var storyRepository: StoryRepository
@@ -31,14 +31,14 @@ class MemoryServiceTest {
     @BeforeEach
     fun setUp() {
         tempDir = Files.createTempDirectory("crack-memory-test")
-        claudeService = mock()
+        aiGateway = mock()
         scenarioRepository = mock()
         storyRepository = mock()
         storySummaryService = mock()
         chatFileService = ChatFileService()
 
         memoryService = MemoryService(
-            claudeService = claudeService,
+            aiGateway = aiGateway,
             chatFileService = chatFileService,
             scenarioRepository = scenarioRepository,
             storyRepository = storyRepository,
@@ -166,7 +166,7 @@ class MemoryServiceTest {
         // given
         val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
-        whenever(claudeService.chat(any())).thenReturn("요약된 내용입니다. 주인공이 하은을 만났습니다.")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약된 내용입니다. 주인공이 하은을 만났습니다.")
 
         // 대화 내용 추가
         chatFileService.appendUserMessage(tempDir, "안녕")
@@ -192,7 +192,7 @@ class MemoryServiceTest {
         // given
         val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
-        whenever(claudeService.chat(any())).thenReturn("요약")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약")
 
         chatFileService.appendUserMessage(tempDir, "메시지1")
         chatFileService.appendAssistantMessage(tempDir, "응답1")
@@ -210,7 +210,7 @@ class MemoryServiceTest {
         // given
         val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
-        whenever(claudeService.chat(any())).thenReturn("요약")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약")
 
         chatFileService.appendUserMessage(tempDir, "메시지1")
 
@@ -233,7 +233,7 @@ class MemoryServiceTest {
 
         val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = scenarioDir.toString())
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
-        whenever(claudeService.chat(any())).thenReturn("갱신된 캐릭터 문서 내용")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("갱신된 캐릭터 문서 내용")
 
         chatFileService.appendUserMessage(tempDir, "대화")
 
@@ -243,7 +243,7 @@ class MemoryServiceTest {
         // then
         assertTrue(result.charactersUpdated.contains("하은"), "하은 캐릭터가 갱신 목록에 있어야 한다")
         // Claude가 2번 호출됨: 요약 1번 + 캐릭터 갱신 N번
-        verify(claudeService, atLeast(2)).chat(any())
+        verify(aiGateway, atLeast(2)).chat(any(), anyOrNull())
     }
 
     @Test
@@ -260,7 +260,7 @@ class MemoryServiceTest {
 
         val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
-        whenever(claudeService.chat(any())).thenReturn("요약")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약")
 
         chatFileService.appendUserMessage(tempDir, "대화")
 

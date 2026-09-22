@@ -1,162 +1,119 @@
 package com.crack.ai.provider
 
+import com.crack.ai.config.AiProperties
 import com.crack.ai.dto.AiRequest
 import com.crack.ai.dto.MessageRole
+import com.crack.ai.support.daemonThreadFactory
 import com.fasterxml.jackson.databind.ObjectMapper
 import org.slf4j.LoggerFactory
-import org.springframework.beans.factory.annotation.Value
 import org.springframework.stereotype.Component
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
-import java.io.BufferedReader
+import java.io.InputStream
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Claude Code CLI를 통한 AI 호출 (Max 구독 활용, 토큰 비용 없음).
- * `claude -p "prompt" --output-format json` 명령어로 처리.
+ * 프롬프트는 stdin으로 넘긴다(ARG_MAX 회피). 스트리밍은
+ * `--output-format stream-json --verbose --include-partial-messages`를 쓴다.
+ * 설정: `crack.ai.cli.path`, `crack.ai.cli.timeout-seconds`, `crack.ai.cli.models.*`
  */
 @Component
 class ClaudeCodeCliProvider(
     private val objectMapper: ObjectMapper,
-    @Value("\${crack.ai.claude-cli-path:claude}")
-    private val cliPath: String
+    private val aiProperties: AiProperties
 ) : AiProvider {
 
     private val log = LoggerFactory.getLogger(javaClass)
-    private val executor = Executors.newCachedThreadPool()
+    private val executor = Executors.newCachedThreadPool(daemonThreadFactory("claude-cli"))
+    private val watchdog = Executors.newSingleThreadScheduledExecutor(daemonThreadFactory("claude-cli-watchdog"))
 
     override val name = "claude-code-cli"
 
     override fun chat(request: AiRequest): String {
-        val prompt = buildPrompt(request)
-        val process = startProcess(prompt, outputFormat = "json")
+        val run = startProcess(request, outputFormat = "json")
+        val output = run.process.inputStream.bufferedReader(Charsets.UTF_8).readText()
+        val exitCode = run.finish()
 
-        val output = process.inputStream.bufferedReader().readText()
-        val errorOutput = process.errorStream.bufferedReader().readText()
-        val exitCode = process.waitFor()
-
+        if (run.timedOut) {
+            throw TimeoutException("Claude Code CLI timed out after ${timeoutSeconds()}s")
+        }
         if (exitCode != 0) {
-            log.error("Claude Code CLI failed (exit=$exitCode): $errorOutput")
-            throw RuntimeException("Claude Code CLI failed: $errorOutput")
+            val stderr = run.stderr()
+            log.error("Claude Code CLI failed (exit=$exitCode): $stderr")
+            throw RuntimeException("Claude Code CLI failed (exit=$exitCode): ${stderr.take(500)}")
         }
 
-        // Parse JSON output to extract "result" field
-        return try {
-            val node = objectMapper.readTree(output)
-            node.get("result")?.asText() ?: output.trim()
+        val node = try {
+            objectMapper.readTree(output)
         } catch (e: Exception) {
             log.debug("Failed to parse JSON output, using raw: ${e.message}")
-            output.trim()
+            return output.trim()
         }
+        val result = node?.get("result")?.takeIf { it.isTextual }?.asText()
+        if (node?.path("is_error")?.asBoolean(false) == true) {
+            throw RuntimeException("Claude Code CLI returned error: ${result ?: node.path("subtype").asText()}")
+        }
+        return result ?: output.trim()
     }
 
-    override fun streamChat(request: AiRequest, emitter: SseEmitter) {
+    override fun stream(request: AiRequest, listener: StreamListener) {
         executor.execute {
             try {
-                val prompt = buildPrompt(request)
-                val process = startProcess(prompt, outputFormat = "stream-json", verbose = true)
-                val reader = process.inputStream.bufferedReader()
-                val fullResponse = StringBuilder()
+                val run = startProcess(request, outputFormat = "stream-json", partialMessages = true)
+                val parser = CliStreamJsonParser(objectMapper)
 
-                processStreamOutput(reader, fullResponse, emitter)
-
-                val completed = process.waitFor(120, TimeUnit.SECONDS)
-                if (!completed) {
-                    process.destroyForcibly()
-                    log.error("Claude Code CLI stream timed out")
+                run.process.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { line ->
+                    parser.feed(line).forEach(listener::onDelta)
                 }
+                val exitCode = run.finish()
+                val result = parser.text
 
-                val result = fullResponse.toString()
-                log.info("Claude CLI stream completed: ${result.length} chars")
-                if (result.isBlank()) {
-                    log.warn("Claude CLI returned empty response")
-                    // Read stderr for clues
-                    val errorOutput = process.errorStream.bufferedReader().readText()
-                    if (errorOutput.isNotBlank()) {
-                        log.warn("Claude CLI stderr: ${errorOutput.take(500)}")
+                when {
+                    run.timedOut ->
+                        listener.onError(TimeoutException("Claude Code CLI timed out after ${timeoutSeconds()}s"))
+                    result.isEmpty() && parser.errorMessage != null ->
+                        listener.onError(RuntimeException("Claude Code CLI returned error: ${parser.errorMessage}"))
+                    result.isEmpty() && exitCode != 0 ->
+                        listener.onError(RuntimeException("Claude Code CLI failed (exit=$exitCode): ${run.stderr().take(500)}"))
+                    else -> {
+                        log.info("Claude CLI stream completed: ${result.length} chars")
+                        if (result.isBlank()) {
+                            log.warn("Claude CLI returned empty response. stderr: ${run.stderr().take(500)}")
+                        }
+                        listener.onComplete(result)
                     }
                 }
-
-                emitter.send(SseEmitter.event()
-                    .name("done")
-                    .data(result))
-                emitter.complete()
-
             } catch (e: Exception) {
                 log.error("Claude Code CLI streaming error", e)
-                try {
-                    emitter.send(SseEmitter.event()
-                        .name("error")
-                        .data(e.message ?: "Unknown error"))
-                    emitter.completeWithError(e)
-                } catch (sendError: Exception) {
-                    log.debug("Failed to send error via SSE: ${sendError.message}")
-                }
+                listener.onError(e)
             }
         }
     }
 
-    private fun processStreamOutput(reader: BufferedReader, fullResponse: StringBuilder, emitter: SseEmitter) {
-        reader.forEachLine { line ->
-            if (line.isBlank()) return@forEachLine
-
-            try {
-                val node = objectMapper.readTree(line)
-                val type = node.get("type")?.asText()
-
-                when (type) {
-                    "assistant" -> {
-                        // Extract text from content blocks
-                        val content = node.get("message")?.get("content")
-                        if (content != null && content.isArray) {
-                            for (block in content) {
-                                if (block.get("type")?.asText() == "text") {
-                                    val text = block.get("text")?.asText() ?: continue
-                                    fullResponse.append(text)
-                                    try {
-                                        emitter.send(SseEmitter.event()
-                                            .name("delta")
-                                            .data(text))
-                                    } catch (e: Exception) {
-                                        log.debug("SSE send failed: ${e.message}")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    "content_block_delta" -> {
-                        val text = node.get("delta")?.get("text")?.asText() ?: return@forEachLine
-                        fullResponse.append(text)
-                        try {
-                            emitter.send(SseEmitter.event()
-                                .name("delta")
-                                .data(text))
-                        } catch (e: Exception) {
-                            log.debug("SSE send failed: ${e.message}")
-                        }
-                    }
-                    "result" -> {
-                        // If we haven't captured any text yet, use the result field
-                        val result = node.get("result")?.asText()
-                        if (result != null && fullResponse.isEmpty()) {
-                            fullResponse.append(result)
-                            try {
-                                emitter.send(SseEmitter.event()
-                                    .name("delta")
-                                    .data(result))
-                            } catch (e: Exception) {
-                                log.debug("SSE send failed: ${e.message}")
-                            }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                log.debug("Failed to parse stream line: ${line.take(100)}")
-            }
+    /** 실행할 명령. 프롬프트는 인자로 넣지 않고 stdin으로 넘긴다. */
+    fun buildCommand(request: AiRequest, outputFormat: String, partialMessages: Boolean = false): List<String> {
+        val model = aiProperties.cli.models.forTier(aiProperties.tierFor(request.purpose))
+        val command = mutableListOf(
+            aiProperties.cli.path, "-p",
+            "--output-format", outputFormat,
+            "--model", model,
+            "--tools", "",
+            "--no-session-persistence"
+        )
+        if (outputFormat == "stream-json") {
+            command.add("--verbose") // -p에서 stream-json은 --verbose가 필요
         }
+        if (partialMessages) {
+            command.add("--include-partial-messages")
+        }
+        return command
     }
 
-    private fun buildPrompt(request: AiRequest): String {
+    fun buildPrompt(request: AiRequest): String {
         val sb = StringBuilder()
 
         sb.appendLine("[System Instructions]")
@@ -165,55 +122,73 @@ class ClaudeCodeCliProvider(
 
         for (msg in request.messages) {
             when (msg.role) {
-                MessageRole.USER -> {
-                    sb.appendLine("[User]")
-                    sb.appendLine(msg.content)
-                    sb.appendLine()
-                }
-                MessageRole.ASSISTANT -> {
-                    sb.appendLine("[Assistant]")
-                    sb.appendLine(msg.content)
-                    sb.appendLine()
-                }
+                MessageRole.USER -> sb.appendLine("[User]")
+                MessageRole.ASSISTANT -> sb.appendLine("[Assistant]")
             }
+            sb.appendLine(msg.content)
+            sb.appendLine()
         }
 
         return sb.toString().trim()
     }
 
-    private fun startProcess(prompt: String, outputFormat: String, verbose: Boolean = false): Process {
-        val command = mutableListOf(
-            resolveCliPath(), "-p", prompt,
-            "--output-format", outputFormat,
-            "--tools", "",
-            "--no-session-persistence"
-        )
-        if (verbose) {
-            command.add("--verbose")
-        }
+    private fun timeoutSeconds(): Long = aiProperties.cli.timeoutSeconds.coerceAtLeast(1)
 
-        log.debug("Starting Claude CLI: ${command.take(3)}... (format=$outputFormat, verbose=$verbose)")
+    private fun startProcess(request: AiRequest, outputFormat: String, partialMessages: Boolean = false): CliRun {
+        val command = buildCommand(request, outputFormat, partialMessages)
+        log.debug("Starting Claude CLI: {} (format={}, model={})", command.first(), outputFormat, command[command.indexOf("--model") + 1])
 
-        return ProcessBuilder(command)
+        val process = ProcessBuilder(command)
             .redirectErrorStream(false)
             .start()
+        val run = CliRun(process)
+
+        // stderr는 버퍼가 차서 막히지 않도록 따로 비운다
+        run.stderrFuture = CompletableFuture.supplyAsync({ readQuietly(process.errorStream) }, executor)
+        run.watchdogFuture = watchdog.schedule({
+            if (process.isAlive) {
+                run.timedOutFlag.set(true)
+                log.error("Claude Code CLI timed out after ${timeoutSeconds()}s — killing process")
+                process.destroyForcibly()
+            }
+        }, timeoutSeconds(), TimeUnit.SECONDS)
+
+        try {
+            process.outputStream.bufferedWriter(Charsets.UTF_8).use { it.write(buildPrompt(request)) }
+        } catch (e: Exception) {
+            process.destroyForcibly()
+            run.finish()
+            throw e
+        }
+        return run
     }
 
-    private fun resolveCliPath(): String {
-        // If configured path exists, use it
-        if (cliPath != "claude") return cliPath
-
-        // Try common locations
-        val commonPaths = listOf(
-            "/Users/mayfly/.npm-global/bin/claude",
-            "/usr/local/bin/claude",
-            "/opt/homebrew/bin/claude"
-        )
-        for (path in commonPaths) {
-            if (java.io.File(path).exists()) return path
+    private fun readQuietly(stream: InputStream): String =
+        try {
+            stream.bufferedReader(Charsets.UTF_8).readText()
+        } catch (e: Exception) {
+            ""
         }
 
-        // Fallback to just "claude" and hope it's on PATH
-        return "claude"
+    private class CliRun(val process: Process) {
+        val timedOutFlag = AtomicBoolean(false)
+        var stderrFuture: CompletableFuture<String>? = null
+        var watchdogFuture: ScheduledFuture<*>? = null
+
+        val timedOut: Boolean get() = timedOutFlag.get()
+
+        /** 프로세스 종료를 기다리고 워치독을 해제한다. 종료 코드를 돌려준다. */
+        fun finish(): Int {
+            val exitCode = process.waitFor()
+            watchdogFuture?.cancel(false)
+            return exitCode
+        }
+
+        fun stderr(): String =
+            try {
+                stderrFuture?.get(5, TimeUnit.SECONDS) ?: ""
+            } catch (e: Exception) {
+                ""
+            }
     }
 }

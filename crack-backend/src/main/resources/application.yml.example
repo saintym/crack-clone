@@ -27,16 +27,31 @@ server:
 crack:
   data-path: ${CRACK_DATA_PATH:../data}
   ai:
+    # claude-code-cli | claude-api | fake (fake는 fake.enabled=true일 때만 등록)
     default-provider: ${CRACK_AI_PROVIDER:claude-code-cli}
+    # 목적 → 모델 등급 (opus | sonnet | haiku)
+    purpose-tiers:
+      chat: opus       # 매 턴 롤플레이 응답
+      record: sonnet   # 기억 기록, 요약, 캐릭터 문서 갱신
+      utility: haiku   # 가벼운 판별, 분류
+    cli:
+      path: ${CRACK_CLAUDE_CLI_PATH:claude}   # PATH에 없으면 절대 경로로
+      timeout-seconds: 300
+      models:          # 등급 → CLI --model 별칭
+        opus: opus
+        sonnet: sonnet
+        haiku: haiku
+    fake:
+      enabled: false
   auth:
     password: ${CRACK_PASSWORD:changeme}
     token-secret: ${CRACK_TOKEN_SECRET:change-me-local-secret}
 
 claude:
   api-key: ${CLAUDE_API_KEY:}
-  model: claude-sonnet-4-20250514
-  opus-model: claude-opus-4-20250514
-  haiku-model: claude-haiku-4-5-20251001
+  model: claude-sonnet-5            # sonnet 등급
+  opus-model: claude-opus-5         # opus 등급
+  haiku-model: claude-haiku-4-5-20251001   # haiku 등급
   max-tokens: 2048
 
 logging:

@@ -1,6 +1,6 @@
 package com.crack.context
 
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.context.dto.*
 import com.crack.context.service.ContextService
 import com.crack.state.entity.*
@@ -16,7 +16,7 @@ import org.mockito.kotlin.*
 @ExtendWith(MockitoExtension::class)
 class ContextServiceTest {
 
-    private lateinit var claudeService: ClaudeService
+    private lateinit var aiGateway: AiGateway
     private lateinit var characterStateRepository: CharacterStateRepository
     private lateinit var characterEventRepository: CharacterEventRepository
     private lateinit var contextService: ContextService
@@ -25,11 +25,11 @@ class ContextServiceTest {
 
     @BeforeEach
     fun setUp() {
-        claudeService = mock()
+        aiGateway = mock()
         characterStateRepository = mock()
         characterEventRepository = mock()
         contextService = ContextService(
-            claudeService, characterStateRepository, characterEventRepository
+            aiGateway, characterStateRepository, characterEventRepository
         )
     }
 

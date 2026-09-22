@@ -1,9 +1,10 @@
 package com.crack.memory.service
 
+import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
 import com.crack.ai.dto.ChatMessage
 import com.crack.ai.dto.MessageRole
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.chat.service.ChatFileService
 import com.crack.global.exception.NotFoundException
 import com.crack.memory.dto.SummarizeResult
@@ -17,7 +18,7 @@ import java.nio.file.Path
 
 @Service
 class MemoryService(
-    private val claudeService: ClaudeService,
+    private val aiGateway: AiGateway,
     private val chatFileService: ChatFileService,
     private val scenarioRepository: ScenarioRepository,
     private val storyRepository: StoryRepository,
@@ -144,9 +145,10 @@ class MemoryService(
         val request = AiRequest(
             systemPrompt = SUMMARY_PROMPT,
             messages = listOf(ChatMessage(MessageRole.USER, chatContent)),
+            purpose = AiPurpose.RECORD,
             maxTokens = 1024
         )
-        return claudeService.chat(request)
+        return aiGateway.chat(request)
     }
 
     private fun updateCharacterDocuments(
@@ -208,9 +210,10 @@ class MemoryService(
                     """.trimIndent()
                 )
             ),
+            purpose = AiPurpose.RECORD,
             maxTokens = 2048
         )
-        return claudeService.chat(request)
+        return aiGateway.chat(request)
     }
 
     private fun storyDir(storyId: Long): Path {

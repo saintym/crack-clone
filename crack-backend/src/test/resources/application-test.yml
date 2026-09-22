@@ -17,8 +17,13 @@ spring:
 
 crack:
   data-path: ${java.io.tmpdir}/crack-test-data
+  ai:
+    default-provider: fake
+    fake:
+      enabled: true
+    cli:
+      path: claude-not-installed
 
 claude:
-  api-key: test-key
-  model: claude-sonnet-4-20250514
+  api-key: ""          # 빈 키 → claude-api는 사용 불가. 테스트는 실제 AI를 호출하지 않는다
   max-tokens: 100
