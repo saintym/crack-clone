@@ -1,6 +1,6 @@
 # T15 기억 패널
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 4
 - **의존**: T11, T14
 - **브랜치**: `task/T15-frontend-memory-panel`
@@ -28,3 +28,7 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23 시작
+- `task/T15-frontend-memory-panel` 브랜치(worktree)에서 시작. 의존 작업 T11·T14 머지 확인.
+- 병렬 작업 주의: T16(백엔드 지시·명령), T20(ChatBubble·ScenarioDetailPage)이 동시에 진행 중이다. ChatBubble·ScenarioDetailPage는 건드리지 않고, ChatPage는 탭 등록, ChatHeader는 뱃지·패널 버튼만 고친다.
