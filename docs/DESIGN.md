@@ -406,6 +406,38 @@ trigger(storyId, reason)
 - **기록하지 않는다:** 일상 대화, 일시적 감정, 사소한 행동, 대사 원문
 - 기존 항목과 같은 내용이면 합쳐서 갱신하고, 중복해서 쓰지 않는다. 턴 번호 `(tNN)`을 붙인다
 
+### 7.5 인물 상태 API (T19, D13)
+
+`GET /api/stories/{storyId}/status`: 기억 문서를 파싱해 상태 패널용 JSON을 돌려준다. LLM을 부르지 않고 파일만 읽는다. 스토리 폴더만 읽는다(D12).
+
+```json
+{
+  "recordedThroughTurn": 30,
+  "state": {"companions": ["설월"], "location": "흑풍채 근처 숲", "time": "3일차 밤", "updatedAtTurn": 30},
+  "protagonist": {
+    "name": "한유",
+    "relations": [{"target": "설월", "description": "목숨을 구해 준 뒤 가까워짐 (t21)", "turns": [21]}],
+    "statsAndSkills": [{"text": "검기 발현 (t25)", "turns": [25]}],
+    "possessions": [], "body": []
+  },
+  "characters": [
+    {
+      "name": "설월", "companion": true,
+      "relations": [{"target": "주인공", "description": "…", "turns": [21]}],
+      "events": [{"fromTurn": 18, "toTurn": 21, "description": "흑풍채 습격에서 주인공이 대신 칼을 맞음"}],
+      "possessions": [{"text": "옥패 (주인공에게 받음, t21)", "turns": [21]}]
+    }
+  ]
+}
+```
+
+- `state`는 `state.json` 그대로다(없으면 빈 기본값). 깨진 `state.json`은 빈 기본값으로 보이고 서버 로그에만 남긴다(패널 전체가 실패하지 않게).
+- `protagonist`는 주인공 `## 변화 기록`의 하위 섹션(§7.1)이다. 주인공 문서가 없으면 null, 섹션이 없으면 목록이 모두 빈 배열. `name`은 `- **이름**:` 값(없으면 `주인공`).
+- `characters`는 인물 `## 기억`의 하위 섹션이다. **기억이 하나라도 있는 인물만** 넣는다. 순서는 동행 인물(`state.companions` 순서) → 나머지 이름순. `companion`은 동행 목록의 이름이 파일명 또는 별칭과 같으면 true.
+- 항목 필드는 T05 파서 결과 그대로다. 관계의 `target`은 콜론 앞(없으면 빈 문자열), 사건의 `fromTurn`·`toTurn`은 `t18–21:` 표기(없으면 null), `turns`는 항목 안의 `(tNN)` 표기에서 읽은 턴들이다. 사건은 문서 순서대로 전부 주고, "최근 3개"는 프론트가 고른다.
+- 스토리가 없으면 404.
+- **갱신 시점(D13):** 프론트는 패널을 열 때와 기억 기록이 끝났을 때(기억 상태가 RUNNING이 아닌 새 값으로 바뀔 때)만 부른다. 매 턴 부르지 않는다.
+
 ## 8. 명령, 지시, 키워드북, 이미지
 
 ### 8.1 지속 OOC 지시 (T16)
