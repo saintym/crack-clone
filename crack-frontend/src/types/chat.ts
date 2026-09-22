@@ -1,3 +1,5 @@
+import type { MemoryStatus } from '../api/memory';
+
 /** 백엔드 `MessageRole` (DESIGN.md §5.2) */
 export type MessageRole = 'USER' | 'ASSISTANT';
 
@@ -23,12 +25,14 @@ export interface Message {
   createdAt: string;
 }
 
-/** `GET /messages`의 `story`. 모르는 필드(예: T14의 `memory`)는 쓰지 않는다 */
+/** `GET /messages`의 `story`. 모르는 필드는 쓰지 않는다 */
 export interface StoryChatInfo {
   turnCount: number;
   recordedThroughTurn: number;
   /** 이 스토리에서 응답을 생성하는 중이면 true (그동안 생성·수정·삭제는 409) */
   generating: boolean;
+  /** 기억 기록 상태 (T14, DESIGN.md §7.2). 채팅 헤더의 기억 뱃지가 쓴다 */
+  memory: MemoryStatus;
 }
 
 /** `GET /messages` 응답 */
