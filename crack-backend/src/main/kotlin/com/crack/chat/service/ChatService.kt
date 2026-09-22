@@ -7,7 +7,6 @@ import com.crack.chat.dto.ChatRequest
 import com.crack.chat.dto.ParsedResponse
 import com.crack.global.config.DataPaths
 import com.crack.global.exception.NotFoundException
-import com.crack.memory.service.MemoryService
 import com.crack.prompt.service.PromptAssembler
 import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.entity.Story
@@ -19,6 +18,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
 import java.nio.file.Path
 import java.time.LocalDateTime
 
+/**
+ * 옛 파일 기반 채팅 흐름(`/api/stories/{id}/chat` 경로). T11이 프론트를 새 API로 옮긴 뒤 T12가 컨트롤러와 함께 삭제한다.
+ * 새 흐름은 [com.crack.chat.flow.ChatFlowService]다.
+ */
+@Deprecated("T07 이후 새 흐름은 com.crack.chat.flow.ChatFlowService. T12에서 삭제")
 @Service
 class ChatService(
     private val aiGateway: AiGateway,
@@ -27,7 +31,6 @@ class ChatService(
     private val messageParser: MessageParser,
     private val scenarioRepository: ScenarioRepository,
     private val storyRepository: StoryRepository,
-    private val memoryService: MemoryService,
     private val dataPaths: DataPaths
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -76,19 +79,7 @@ class ChatService(
         story.turnCount += 1
         story.updatedAt = LocalDateTime.now()
         storyRepository.save(story)
-
-        val newTurnCount = story.turnCount
-
-        // 10턴 도달 시 자동 요약
-        if (memoryService.shouldSummarize(newTurnCount)) {
-            log.info("${newTurnCount}턴 도달 — 자동 요약 시작: storyId=$storyId")
-            try {
-                val result = memoryService.summarize(storyId)
-                log.info("자동 요약 완료: ${result.turnRange}턴, 갱신 캐릭터: ${result.charactersUpdated}")
-            } catch (e: Exception) {
-                log.error("자동 요약 실패: storyId=$storyId", e)
-            }
-        }
+        // 옛 10턴 자동 요약(memoryService.summarize)은 T07에서 제거했다. 기억 기록은 T14가 AfterTurnHook으로 연결한다.
     }
 
     fun parseResponse(rawResponse: String): ParsedResponse {
