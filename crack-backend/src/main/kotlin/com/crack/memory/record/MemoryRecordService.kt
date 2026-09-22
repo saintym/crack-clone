@@ -323,9 +323,10 @@ class MemoryRecordService(
         return MemoryStatusView(latest.status.name, latest.id, unseen)
     }
 
+    /** 끝난(DONE, FAILED) 기록만 읽음 처리한다. RUNNING을 읽음으로 바꾸면 끝난 뒤 뱃지가 뜨지 않는다(BUG-009). */
     fun markSeen(storyId: Long) {
         requireStory(storyId)
-        tx.executeWithoutResult { recordRepository.markAllSeen(storyId) }
+        tx.executeWithoutResult { recordRepository.markSeen(storyId, UNSEEN_STATUSES) }
     }
 
     /** 서버가 기록 도중 꺼졌으면 RUNNING이 남는다. 기동할 때 FAILED로 바꾼다. */

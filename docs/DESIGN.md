@@ -370,7 +370,7 @@ trigger(storyId, reason)
 | GET | `/memory/records` | `MemoryRecordSummary[]` (최근 것부터) |
 | GET | `/memory/records/{id}` | `MemoryRecordSummary` + `files: [{path, before, current}]`. `before`는 스냅샷(기록 전에 없던 파일이면 null), `current`는 지금 내용(없으면 null). diff는 프론트가 계산한다 |
 | POST | `/memory/records/{id}/revert` | 되돌리기. 응답 `MemoryRecordSummary`. 최근 DONE이 아니면 400, 실행 중이면 409 |
-| POST | `/memory/records/seen` | 뱃지 읽음 처리(이 스토리 기록 전부 `seen = true`). 204 |
+| POST | `/memory/records/seen` | 뱃지 읽음 처리(이 스토리의 DONE·FAILED 기록만 `seen = true`. RUNNING은 제외). 204 |
 
 `MemoryRecordSummary = {id, fromTurn, toTurn, reason, status, changedFiles: string[], rerecordedTurns: int[], error, createdAt, finishedAt, revertable}`. `revertable`은 가장 최근 DONE이고 실행 중인 기록이 없을 때 true.
 
