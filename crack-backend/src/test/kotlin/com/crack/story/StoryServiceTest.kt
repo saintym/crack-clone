@@ -11,6 +11,7 @@ import com.crack.story.entity.Story
 import com.crack.story.entity.StoryStatus
 import com.crack.story.files.SampleScenario
 import com.crack.story.files.StoryFiles
+import com.crack.story.prologue.PrologueService
 import com.crack.story.repository.StoryRepository
 import com.crack.story.service.StoryService
 import org.junit.jupiter.api.*
@@ -27,6 +28,7 @@ class StoryServiceTest {
 
     private lateinit var storyRepository: StoryRepository
     private lateinit var scenarioRepository: ScenarioRepository
+    private lateinit var prologueService: PrologueService
     private lateinit var storyService: StoryService
     private lateinit var tempDir: Path
 
@@ -35,7 +37,8 @@ class StoryServiceTest {
         tempDir = Files.createTempDirectory("crack-story-test")
         storyRepository = mock()
         scenarioRepository = mock()
-        storyService = StoryService(storyRepository, scenarioRepository, DataPaths(DataPathConfig(dataPath = tempDir.toString())), ChatFileService())
+        prologueService = mock()
+        storyService = StoryService(storyRepository, scenarioRepository, DataPaths(DataPathConfig(dataPath = tempDir.toString())), ChatFileService(), prologueService)
     }
 
     @AfterEach
@@ -86,6 +89,22 @@ class StoryServiceTest {
         assertTrue(Files.exists(path.resolve("story.json")))
         assertFalse(Files.exists(path.resolve("images.md")))
         assertFalse(Files.exists(path.resolve("memory/must_remember.md")), "옛 must_remember는 만들지 않는다")
+        // 첫 메시지는 원본이 아니라 복사된 스토리 폴더에서 읽는다
+        verify(prologueService).insertIfPresent(1L, path)
+    }
+
+    @Test
+    fun `첫 메시지 저장이 실패하면 만든 스토리 폴더를 지운다`() {
+        SampleScenario.copyTo(tempDir.resolve("test"))
+        whenever(scenarioRepository.findById(1L)).thenReturn(Optional.of(Scenario(id = 1L, name = "test", title = "Test")))
+        stubSave()
+        whenever(prologueService.insertIfPresent(any(), any())).thenThrow(IllegalStateException("DB 오류"))
+
+        assertThrows<IllegalStateException> { storyService.create(1L, StoryCreateRequest(title = "실패")) }
+
+        val storiesDir = tempDir.resolve("test/stories")
+        val leftovers = if (Files.exists(storiesDir)) Files.list(storiesDir).use { it.toList() } else emptyList()
+        assertTrue(leftovers.isEmpty(), "고아 스토리 폴더가 남으면 안 된다: $leftovers")
     }
 
     @Test
