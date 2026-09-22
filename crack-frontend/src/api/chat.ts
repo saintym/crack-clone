@@ -34,7 +34,8 @@ export function errorMessage(err: unknown, fallback: string): string {
 
 const base = (storyId: number) => `/stories/${storyId}/messages`;
 
-export interface SendBody { content: string; provider?: string }
+/** `command`: 사용자 정의 명령 이름(앞의 `/` 없이). 주면 유저 메시지가 COMMAND로 저장되고 명령 프롬프트가 이번 턴에만 들어간다(§8.2) */
+export interface SendBody { content: string; provider?: string; command?: string }
 export interface RegenerateBody { provider?: string; instruction?: string; messageId?: number }
 export interface ContinueBody { provider?: string }
 

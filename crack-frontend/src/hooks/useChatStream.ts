@@ -107,11 +107,12 @@ export function useChatStream({ storyId, provider, onMessage, onConflict, onInte
 
   /**
    * 유저 메시지(상황서술 변환까지 끝난 것)를 보내고 응답을 받는다.
+   * @param command 사용자 정의 명령 이름(T18). `content`는 `/이름 인자` 그대로 보낸다
    * @returns 유저 메시지가 저장되었으면 true. false면 입력창에 내용을 되돌린다
    */
-  const send = useCallback((content: string) =>
+  const send = useCallback((content: string, command?: string) =>
     run({ mode: 'send', pendingUser: content },
-      (handlers, signal) => chatApi.send(storyId, { content, ...providerBody() }, handlers, signal)),
+      (handlers, signal) => chatApi.send(storyId, { content, ...(command ? { command } : {}), ...providerBody() }, handlers, signal)),
   [run, storyId, providerBody]);
 
   /**
