@@ -1,7 +1,7 @@
 package com.crack.story
 
 import com.crack.global.config.DataPaths
-import com.crack.prompt.service.LegacyPromptAssembler
+import com.crack.prompt.service.PromptAssembler
 import com.crack.scenario.entity.Scenario
 import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.dto.StoryCreateRequest
@@ -46,7 +46,7 @@ class StoryIsolationTest {
     @Autowired lateinit var scenarioRepository: ScenarioRepository
     @Autowired lateinit var storyRepository: StoryRepository
     @Autowired lateinit var dataPaths: DataPaths
-    @Autowired lateinit var promptAssembler: LegacyPromptAssembler
+    @Autowired lateinit var promptAssembler: PromptAssembler
 
     private lateinit var scenario: Scenario
     private lateinit var scenarioDir: Path
@@ -83,8 +83,9 @@ class StoryIsolationTest {
     private fun getDoc(storyId: Long, path: String) =
         mockMvc.perform(get("/api/stories/$storyId/documents/content").param("path", path))
 
+    /** v2 조립기(T13)는 언급된 인물만 넣으므로, 두 인물을 언급한 가상 입력으로 조립한다. */
     private fun prompt(storyId: Long): String =
-        promptAssembler.assembleSystemPrompt(scenarioDir, storyDir(storyId))
+        promptAssembler.assemble(storyId, pendingInput = "설월과 무극").systemPrompt
 
     private fun original(rel: String): String = Files.readString(SampleScenario.source.resolve(rel))
 
