@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { documentApi, type CharacterInfo, type ScenarioDocumentType } from '../api/documents';
 import MobileLayout from '../components/layout/MobileLayout';
+import ImageCatalogList from '../components/scenario/ImageCatalogList';
 
-type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist';
+type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist' | 'images';
 
 export default function ScenarioDetailPage() {
   const { scenarioName } = useParams<{ scenarioName: string }>();
@@ -117,6 +118,7 @@ export default function ScenarioDetailPage() {
     { key: 'prologue', label: '첫 메시지' },
     { key: 'protagonist', label: '주인공' },
     { key: 'characters', label: '캐릭터' },
+    { key: 'images', label: '이미지' },
   ];
 
   return (
@@ -219,13 +221,27 @@ export default function ScenarioDetailPage() {
               </p>
             )}
 
+            {tab === 'images' && (
+              <p className="text-xs text-text-muted mb-3 leading-relaxed">
+                한 줄에 하나씩 <code className="font-mono">- 태그: 주소 | 설명</code> 형식으로 적습니다. 주소는 http/https만 쓸 수 있고,
+                AI에게는 태그와 설명만 보냅니다. 장면에 맞으면 AI가 태그를 골라 채팅에 이미지로 보여 줍니다.
+                진행 중인 스토리에도 바로 반영됩니다.
+              </p>
+            )}
+
             {editing ? (
               <>
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
+                  placeholder={tab === 'images' ? '- 설월_미소: https://example.com/a.webp | 설월이 옅게 웃는 모습' : undefined}
                   className="flex-1 w-full p-4 bg-surface border border-border/40 rounded-2xl text-text-primary text-sm font-mono resize-none focus:outline-none focus:border-accent/60 transition-all min-h-[300px] leading-relaxed"
                 />
+                {tab === 'images' && (
+                  <div className="mt-4">
+                    <ImageCatalogList text={editContent} />
+                  </div>
+                )}
                 <div className="flex gap-3 mt-4">
                   <button
                     onClick={() => setEditing(false)}
@@ -241,6 +257,22 @@ export default function ScenarioDetailPage() {
                     {saving ? '저장 중...' : '저장'}
                   </button>
                 </div>
+              </>
+            ) : tab === 'images' ? (
+              <>
+                {content.trim() ? (
+                  <ImageCatalogList text={content} />
+                ) : (
+                  <div className="p-5 bg-surface border border-border/40 rounded-2xl text-sm text-text-muted italic">
+                    (등록된 이미지 없음)
+                  </div>
+                )}
+                <button
+                  onClick={() => { setEditContent(content); setEditing(true); }}
+                  className="mt-4 py-3.5 bg-accent hover:bg-accent-hover text-white rounded-2xl text-[15px] font-semibold transition-all"
+                >
+                  편집
+                </button>
               </>
             ) : (
               <>
