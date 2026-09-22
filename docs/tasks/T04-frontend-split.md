@@ -1,6 +1,6 @@
 # T04 ChatPage 컴포넌트/훅 분리
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 1
 - **의존**: 없음
 - **브랜치**: `task/T04-frontend-split`

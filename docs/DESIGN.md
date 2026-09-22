@@ -387,15 +387,20 @@ class KeywordMatcher {
 ## 10. 프론트엔드 구조 (T04 이후)
 
 ```
-src/pages/ChatPage.tsx              조립만 담당 (목표 150줄 이하)
+src/pages/ChatPage.tsx              조립만 담당 (T04 완료 시 100줄)
 src/hooks/useChatStream.ts          SSE 전송, 재생성, 이어쓰기
 src/hooks/useMessages.ts            메시지 목록 상태
+src/hooks/useProviders.ts           프로바이더 목록과 선택
+src/hooks/useStoryContext.ts        현재 스토리, 시나리오, 사이드바 목록
+src/types/chat.ts, types/panel.ts   공용 타입
 src/components/chat/ChatHeader.tsx
 src/components/chat/MessageList.tsx
 src/components/chat/ChatBubble.tsx  마크다운 렌더링 (T20에서 이미지 태그 처리)
-src/components/chat/MessageMenu.tsx 수정, 삭제, 분기
+src/components/chat/MessageMenu.tsx 수정, 삭제, 분기, 재생성, 이어쓰기
+src/components/chat/BranchDialog.tsx 분기 제목 입력 하단 시트
 src/components/chat/ChatInput.tsx   (T18에서 / 자동완성)
 src/components/chat/StorySidebar.tsx
+src/components/panels/SidePanel.tsx 탭을 props로 받는 드로어 (PC 오른쪽, 모바일 하단 시트, 배경을 덮지 않음)
 src/components/panels/…             T15 기억 패널, T18 지시 패널, T19 상태 패널
 ```
 

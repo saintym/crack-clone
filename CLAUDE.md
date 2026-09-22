@@ -27,7 +27,7 @@ cd crack-backend && ./gradlew test
 cd crack-frontend && npm ci && npm run build && npm run lint
 ```
 
-> **기준선:** 백엔드 테스트 전부 통과. 프론트 build 통과. lint는 T04 머지 전까지 `ChatPage.tsx` 오류 1건이 남아 있으며, 그 전에는 "새 lint 오류를 만들지 않는다"가 기준이다.
+> **기준선:** 백엔드 테스트 전부 통과. 프론트 build 통과. lint 오류 0 (T00·T04로 복구).
 > **프론트 주의:** `.npmrc`(legacy-peer-deps)가 있어야 `npm ci`가 된다. React Hooks lint(v7)는 effect 안에서 부르는 async 함수의 `await` 뒤 setState도 오류로 본다. 로드 함수는 `.then` 체인이나 effect 안의 IIFE로 작성한다(T00 작업 로그 참고).
 
 ## 리모트 환경의 제약과 대응
