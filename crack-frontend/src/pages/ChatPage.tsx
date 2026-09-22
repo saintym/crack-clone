@@ -21,27 +21,32 @@ export default function ChatPage() {
 
   const { story, scenario, stories, refreshStories } = useStoryContext(storyId);
   const { providers, selectedProvider, setSelectedProvider } = useProviders(storyId);
-  const { messages, setMessages, reloadHistory, editMessage, deleteMessage } =
-    useMessages(storyId, refreshStories);
-  const { streaming, streamContent, send, regenerate, continueStory } = useChatStream({
-    storyId,
-    provider: selectedProvider,
-    setMessages,
-    reloadHistory,
-    onTurnEnd: refreshStories,
-  });
+  const chat = useMessages(storyId, refreshStories);
+  const { stream, streaming, error: streamError, clearError: clearStreamError, send, regenerate, continueStory } =
+    useChatStream({
+      storyId,
+      provider: selectedProvider,
+      onMessage: chat.applyMessage,
+      onConflict: chat.markBusy,
+      onInterrupted: chat.reload,
+      onTurnEnd: refreshStories,
+    });
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [branching, setBranching] = useState<{ index: number; title: string } | null>(null);
+  const [branching, setBranching] = useState<{ seq: number; title: string } | null>(null);
 
   // 오른쪽 패널 탭. T15(기억), T18(지시), T19(상태)가 여기에 추가한다. 비어 있으면 여는 버튼을 숨긴다.
   const panelTabs: SidePanelTab[] = [];
   const [panelOpen, setPanelOpen] = useState(false);
 
+  const locked = streaming || chat.busy || !chat.loaded;
+  const last = chat.messages[chat.messages.length - 1];
+  const canContinue = last?.role === 'ASSISTANT';
+
   const handleBranch = useCallback(async (title: string) => {
     if (branching === null || !title.trim() || !storyId) return;
     try {
-      const { data: newStory } = await storyApi.branch(storyId, branching.index, title.trim());
+      const { data: newStory } = await storyApi.branch(storyId, branching.seq, title.trim());
       setBranching(null);
       refreshStories();
       navigate(`/chat/${newStory.id}`);
@@ -73,17 +78,26 @@ export default function ChatPage() {
         />
 
         <MessageList
-          messages={messages}
-          streaming={streaming}
-          streamContent={streamContent}
-          onRegenerate={regenerate}
-          onContinue={continueStory}
-          onBranch={(index) => setBranching({ index, title: `${story?.title || '스토리'} - 분기` })}
-          onEditSave={editMessage}
-          onDelete={deleteMessage}
+          messages={chat.messages}
+          stream={stream}
+          locked={locked}
+          onSelectVariant={(msg, index) => chat.selectVariant(msg.id, index)}
+          onRegenerate={(msg, instruction) => { regenerate(msg, instruction); }}
+          onContinue={() => { continueStory(); }}
+          onBranch={(msg) => setBranching({ seq: msg.seq, title: `${story?.title || '스토리'} - 분기` })}
+          onEditSave={(msg, content) => chat.editMessage(msg.id, content)}
+          onDelete={(msg) => chat.deleteFrom(msg.id)}
         />
 
-        <ChatInput streaming={streaming} sendBlocked={streaming || !storyId} onSend={send} />
+        <ChatInput
+          streaming={streaming}
+          locked={locked}
+          canContinue={canContinue}
+          onSend={send}
+          onContinue={() => { continueStory(); }}
+          notice={streamError ?? chat.error}
+          onDismissNotice={() => { clearStreamError(); chat.clearError(); }}
+        />
       </div>
 
       <SidePanel open={panelOpen} onClose={() => setPanelOpen(false)} tabs={panelTabs} />
