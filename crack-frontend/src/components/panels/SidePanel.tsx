@@ -6,14 +6,22 @@ interface SidePanelProps {
   onClose: () => void;
   /** 보여 줄 탭 목록. T15(기억), T18(지시), T19(상태)가 추가한다 */
   tabs: SidePanelTab[];
+  /** 주면 보이는 탭을 밖에서 정한다(T18: `/ooc`로 지시 탭 열기). 없으면 안에서 기억한다 */
+  activeTabId?: string | null;
+  onSelectTab?: (id: string) => void;
 }
 
 /**
  * 채팅 화면 오른쪽 드로어(모바일은 하단 시트). 플레이 흐름을 가리지 않도록 배경을 덮지 않는다 (D7).
  * 아직 탭이 없으므로 ChatPage는 tabs=[]를 넘기고 여는 버튼도 숨긴다.
  */
-export default function SidePanel({ open, onClose, tabs }: SidePanelProps) {
-  const [activeTabId, setActiveTabId] = useState<string | null>(null);
+export default function SidePanel({ open, onClose, tabs, activeTabId: controlledTabId, onSelectTab }: SidePanelProps) {
+  const [localTabId, setLocalTabId] = useState<string | null>(null);
+  const activeTabId = controlledTabId !== undefined ? controlledTabId : localTabId;
+  const setActiveTabId = (id: string) => {
+    setLocalTabId(id);
+    onSelectTab?.(id);
+  };
 
   if (!open) return null;
 
@@ -34,6 +42,7 @@ export default function SidePanel({ open, onClose, tabs }: SidePanelProps) {
               }`}
             >
               {tab.label}
+              {tab.badge}
             </button>
           ))}
         </div>

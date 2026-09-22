@@ -4,5 +4,7 @@ import type { ReactNode } from 'react';
 export interface SidePanelTab {
   id: string;
   label: string;
+  /** 탭 이름 옆에 붙일 작은 표시 (T18: 켜진 지시 개수). 없으면 생략 */
+  badge?: ReactNode;
   content: ReactNode;
 }
