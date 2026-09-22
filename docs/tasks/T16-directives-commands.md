@@ -1,6 +1,6 @@
 # T16 지속 OOC 지시 + `/` 명령 백엔드
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 5
 - **의존**: T13, T14
 - **브랜치**: `task/T16-directives-commands`
