@@ -1,6 +1,6 @@
 # T09 기존 데이터 이전 + 분기 이식
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 2
 - **의존**: T03, T08
 - **브랜치**: `task/T09-legacy-migration`
@@ -36,3 +36,6 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 작업 시작. 브랜치 `task/T09-legacy-migration`(worktree).
