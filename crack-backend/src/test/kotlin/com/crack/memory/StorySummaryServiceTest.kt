@@ -1,6 +1,6 @@
 package com.crack.memory
 
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.memory.entity.StorySummary
 import com.crack.memory.entity.SummaryLevel
 import com.crack.memory.repository.StorySummaryRepository
@@ -16,7 +16,7 @@ import org.mockito.kotlin.*
 class StorySummaryServiceTest {
 
     private lateinit var storySummaryRepository: StorySummaryRepository
-    private lateinit var claudeService: ClaudeService
+    private lateinit var aiGateway: AiGateway
     private lateinit var storySummaryService: StorySummaryService
 
     private val testStoryId = 1L
@@ -25,8 +25,8 @@ class StorySummaryServiceTest {
     @BeforeEach
     fun setUp() {
         storySummaryRepository = mock()
-        claudeService = mock()
-        storySummaryService = StorySummaryService(storySummaryRepository, claudeService)
+        aiGateway = mock()
+        storySummaryService = StorySummaryService(storySummaryRepository, aiGateway)
     }
 
     @Test
@@ -59,7 +59,7 @@ class StorySummaryServiceTest {
             .thenReturn(l1Summaries)
         whenever(storySummaryRepository.findByStoryIdAndLevelOrderByFromTurnAsc(testStoryId, SummaryLevel.L2))
             .thenReturn(emptyList())
-        whenever(claudeService.chat(any())).thenReturn("통합된 L2 요약")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("통합된 L2 요약")
         whenever(storySummaryRepository.save(any<StorySummary>())).thenAnswer { it.getArgument(0) }
 
         // when
@@ -69,7 +69,7 @@ class StorySummaryServiceTest {
         verify(storySummaryRepository).save(argThat<StorySummary> {
             level == SummaryLevel.L2 && fromTurn == 1 && toTurn == 30
         })
-        verify(claudeService).chat(any())
+        verify(aiGateway).chat(any(), anyOrNull())
     }
 
     @Test
@@ -89,7 +89,7 @@ class StorySummaryServiceTest {
 
         // then
         verify(storySummaryRepository, never()).save(any<StorySummary>())
-        verify(claudeService, never()).chat(any())
+        verify(aiGateway, never()).chat(any(), anyOrNull())
     }
 
     @Test
@@ -128,7 +128,7 @@ class StorySummaryServiceTest {
             .thenReturn(l2Summaries)
         whenever(storySummaryRepository.findByStoryIdAndLevelOrderByFromTurnAsc(testStoryId, SummaryLevel.L3))
             .thenReturn(emptyList())
-        whenever(claudeService.chat(any())).thenReturn("통합된 L3 요약")
+        whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("통합된 L3 요약")
         whenever(storySummaryRepository.save(any<StorySummary>())).thenAnswer { it.getArgument(0) }
 
         // when

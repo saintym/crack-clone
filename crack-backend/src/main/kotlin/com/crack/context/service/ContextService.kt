@@ -1,10 +1,10 @@
 package com.crack.context.service
 
+import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
 import com.crack.ai.dto.ChatMessage
 import com.crack.ai.dto.MessageRole
-import com.crack.ai.dto.ModelTier
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.context.dto.*
 import com.crack.state.entity.EventType
 import com.crack.state.entity.StateType
@@ -15,7 +15,7 @@ import org.springframework.stereotype.Service
 
 @Service
 class ContextService(
-    private val claudeService: ClaudeService,
+    private val aiGateway: AiGateway,
     private val characterStateRepository: CharacterStateRepository,
     private val characterEventRepository: CharacterEventRepository
 ) {
@@ -25,11 +25,11 @@ class ContextService(
         val prompt = buildAnalysisPrompt(userMessage, recentHistory)
 
         return try {
-            val response = claudeService.chat(AiRequest(
+            val response = aiGateway.chat(AiRequest(
                 systemPrompt = ANALYSIS_SYSTEM_PROMPT,
                 messages = listOf(ChatMessage(MessageRole.USER, prompt)),
                 maxTokens = 300,
-                modelTier = ModelTier.HAIKU
+                purpose = AiPurpose.UTILITY
             ))
             parseAnalysisResponse(response)
         } catch (e: Exception) {

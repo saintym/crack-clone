@@ -1,9 +1,8 @@
 package com.crack.chat.service
 
+import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
-import com.crack.ai.dto.ModelTier
-import com.crack.ai.provider.AiProviderRegistry
-import com.crack.ai.service.ClaudeService
+import com.crack.ai.service.AiGateway
 import com.crack.chat.dto.ChatRequest
 import com.crack.chat.dto.ParsedResponse
 import com.crack.global.exception.NotFoundException
@@ -21,8 +20,7 @@ import java.time.LocalDateTime
 
 @Service
 class ChatService(
-    private val claudeService: ClaudeService,
-    private val aiProviderRegistry: AiProviderRegistry,
+    private val aiGateway: AiGateway,
     private val promptAssembler: PromptAssembler,
     private val chatFileService: ChatFileService,
     private val messageParser: MessageParser,
@@ -53,17 +51,12 @@ class ChatService(
         val aiRequest = AiRequest(
             systemPrompt = systemPrompt,
             messages = conversationMessages,
-            modelTier = ModelTier.OPUS
+            purpose = AiPurpose.CHAT
         )
 
         // 5. SSE 스트리밍 (프로바이더 선택)
-        val provider = if (request.provider != null) {
-            aiProviderRegistry.getByName(request.provider)
-        } else {
-            aiProviderRegistry.getDefault()
-        }
         val emitter = SseEmitter(300_000L)
-        provider.streamChat(aiRequest, emitter)
+        aiGateway.stream(aiRequest, SseStreamListener(emitter), request.provider)
         return emitter
     }
 
@@ -144,16 +137,11 @@ class ChatService(
         val aiRequest = AiRequest(
             systemPrompt = systemPrompt,
             messages = conversationMessages,
-            modelTier = ModelTier.OPUS
+            purpose = AiPurpose.CHAT
         )
 
-        val provider = if (request.provider != null) {
-            aiProviderRegistry.getByName(request.provider)
-        } else {
-            aiProviderRegistry.getDefault()
-        }
         val emitter = SseEmitter(300_000L)
-        provider.streamChat(aiRequest, emitter)
+        aiGateway.stream(aiRequest, SseStreamListener(emitter), request.provider)
         return emitter
     }
 
@@ -174,16 +162,11 @@ class ChatService(
         val aiRequest = AiRequest(
             systemPrompt = systemPrompt,
             messages = conversationMessages,
-            modelTier = ModelTier.OPUS
+            purpose = AiPurpose.CHAT
         )
 
-        val provider = if (request.provider != null) {
-            aiProviderRegistry.getByName(request.provider)
-        } else {
-            aiProviderRegistry.getDefault()
-        }
         val emitter = SseEmitter(300_000L)
-        provider.streamChat(aiRequest, emitter)
+        aiGateway.stream(aiRequest, SseStreamListener(emitter), request.provider)
         return emitter
     }
 
