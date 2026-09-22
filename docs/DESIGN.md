@@ -105,7 +105,7 @@ ALTER TABLE stories ADD COLUMN recorded_through_turn INT NOT NULL DEFAULT 0;
 ```
 
 ### 턴 규칙
-- 유저 메시지는 새 턴을 연다(`turn_no = story.turnCount + 1`). 그에 대한 AI 응답은 같은 턴이다.
+- 유저 메시지는 새 턴을 연다(`turn_no = 남은 메시지의 최대 turn_no + 1`. stories.turn_count 값을 믿지 않고 매번 계산한다). 그에 대한 AI 응답은 같은 턴이다.
 - **이어쓰기(CONTINUATION)** 는 유저 메시지 없이 AI 메시지만으로 새 턴을 연다.
 - **프롤로그**는 `turn_no = 0`, `seq = 0`, `kind = PROLOGUE`, `role = ASSISTANT`다. 턴 수와 기억 기록 대상에서 빠진다.
 - `stories.turn_count` = 남아 있는 메시지의 최대 `turn_no`. 추가하거나 잘라낼 때마다 다시 계산한다.
