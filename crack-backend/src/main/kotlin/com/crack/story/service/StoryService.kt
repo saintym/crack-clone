@@ -9,6 +9,7 @@ import com.crack.story.dto.StoryResponse
 import com.crack.story.entity.Story
 import com.crack.story.entity.StoryStatus
 import com.crack.story.files.StoryFiles
+import com.crack.story.prologue.PrologueService
 import com.crack.story.repository.StoryRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -24,7 +25,8 @@ class StoryService(
     private val storyRepository: StoryRepository,
     private val scenarioRepository: ScenarioRepository,
     private val dataPaths: DataPaths,
-    private val chatFileService: ChatFileService
+    private val chatFileService: ChatFileService,
+    private val prologueService: PrologueService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -37,13 +39,16 @@ class StoryService(
         val storyDir = createStoryDirectory(scenario.name, dirName)
 
         val story = withCleanupOnFailure(scenario.name, storyDir) {
-            storyRepository.save(
+            val saved = storyRepository.save(
                 Story(
                     scenarioId = scenarioId,
                     title = request.title,
                     dirName = dirName
                 )
             )
+            // 첫 메시지(D16): 복사된 스토리 폴더의 prologue.md를 턴 0으로 넣는다. 턴 수는 0 그대로다.
+            prologueService.insertIfPresent(saved.id, storyDir)
+            saved
         }
         return StoryResponse.from(story)
     }
