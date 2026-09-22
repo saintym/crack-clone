@@ -1,6 +1,5 @@
 package com.crack.story
 
-import com.crack.chat.service.ChatFileService
 import com.crack.global.config.DataPathConfig
 import com.crack.global.config.DataPaths
 import com.crack.global.exception.NotFoundException
@@ -38,7 +37,7 @@ class StoryServiceTest {
         storyRepository = mock()
         scenarioRepository = mock()
         prologueService = mock()
-        storyService = StoryService(storyRepository, scenarioRepository, DataPaths(DataPathConfig(dataPath = tempDir.toString())), ChatFileService(), prologueService)
+        storyService = StoryService(storyRepository, scenarioRepository, DataPaths(DataPathConfig(dataPath = tempDir.toString())), prologueService)
     }
 
     @AfterEach
