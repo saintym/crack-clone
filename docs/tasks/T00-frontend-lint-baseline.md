@@ -1,6 +1,6 @@
 # T00 프론트 lint 기준선 복구
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 1
 - **의존**: 없음
 - **브랜치**: `task/T00-frontend-lint-baseline`
@@ -34,3 +34,6 @@ StoriesPage.tsx:19            warn exhaustive-deps
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 작업 시작. 대상 세 파일의 lint 오류 확인부터 진행.
