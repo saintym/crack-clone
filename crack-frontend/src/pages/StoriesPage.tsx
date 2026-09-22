@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { scenarioApi, type Scenario } from '../api/scenarios';
 import { storyApi, type Story } from '../api/stories';
@@ -13,23 +13,24 @@ export default function StoriesPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
 
-  useEffect(() => {
+  const loadData = useCallback(() => {
     if (!scenarioName) return;
-    loadData();
+    // setState를 then 콜백 안에서 호출해야 react-hooks/set-state-in-effect가
+    // 비동기 갱신으로 인식한다 (async/await 본문은 동기 호출로 판정됨).
+    return scenarioApi
+      .get(scenarioName)
+      .then(({ data: sc }) => {
+        setScenario(sc);
+        return storyApi.list(sc.id);
+      })
+      .then(({ data: st }) => setStories(st))
+      .catch((err) => console.error('Failed to load:', err))
+      .finally(() => setLoading(false));
   }, [scenarioName]);
 
-  const loadData = async () => {
-    try {
-      const { data: sc } = await scenarioApi.get(scenarioName!);
-      setScenario(sc);
-      const { data: st } = await storyApi.list(sc.id);
-      setStories(st);
-    } catch (err) {
-      console.error('Failed to load:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const handleCreate = async () => {
     if (!scenario || !newTitle.trim()) return;
