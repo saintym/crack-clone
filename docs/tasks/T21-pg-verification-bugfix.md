@@ -1,6 +1,6 @@
 # T21 실제 PostgreSQL 통합 검증 + 버그 수정
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 6
 - **의존**: T14, T15
 - **브랜치**: `task/T21-pg-verification-bugfix`
