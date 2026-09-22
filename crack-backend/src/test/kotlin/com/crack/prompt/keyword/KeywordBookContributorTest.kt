@@ -148,4 +148,15 @@ class KeywordBookContributorTest {
         assertThat(kb.select(dir, "산적").single().content).isEqualTo("북쪽 산맥의 산적 소굴.")
         assertThat(kb.select(other, "산적").single().content).isEqualTo("다른 스토리의 흑풍채.")
     }
+
+    @Test
+    fun `템플릿 keywords_md는 안내 주석을 빼고 예시 항목만 읽힌다`() {
+        val template = Files.readString(Path.of("..", "data", "_templates", "keywords.md"))
+
+        val entries = KeywordBookParser.parse(template)
+
+        assertThat(entries.map { it.id }).containsExactly("천마신교", "청운객잔")
+        assertThat(entries[0].keys).containsExactly("천마신교", "마교", "신교")
+        assertThat(entries.map { it.content }).noneMatch { it.contains("<!--") || it.contains("-->") }
+    }
 }
