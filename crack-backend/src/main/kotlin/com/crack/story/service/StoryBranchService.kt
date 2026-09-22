@@ -41,15 +41,10 @@ class StoryBranchService(
     private val dataPaths: DataPaths,
 ) {
 
-    /**
-     * [messageId] 또는 [messageIndex] 중 하나로 기준 메시지를 받는다.
-     * [messageIndex]는 과도기용(T11이 프론트를 옮기기 전)이며 메시지의 `seq`로 해석한다.
-     */
+    /** [messageId]의 메시지까지를 복사해 분기한다. */
     @Transactional
-    fun branch(storyId: Long, messageId: Long?, messageIndex: Int?, title: String): StoryResponse {
-        if ((messageId == null) == (messageIndex == null)) {
-            throw BadRequestException("messageId와 messageIndex 중 하나만 지정해야 합니다")
-        }
+    fun branch(storyId: Long, messageId: Long?, title: String): StoryResponse {
+        if (messageId == null) throw BadRequestException("messageId를 지정해야 합니다")
         if (title.isBlank()) throw BadRequestException("분기 제목이 비어 있습니다")
 
         val source = storyDirs.locate(storyId)
@@ -57,13 +52,8 @@ class StoryBranchService(
             throw BadRequestException("이전되지 않은 옛 스토리는 분기할 수 없습니다. 먼저 POST /api/admin/migrate-legacy로 이전하세요: $storyId")
         }
 
-        val pivot = if (messageId != null) {
-            messageRepository.findByIdAndStoryId(messageId, storyId)
-                ?: throw NotFoundException("이 스토리의 메시지가 아닙니다: $messageId")
-        } else {
-            messageRepository.findByStoryIdOrderBySeqAsc(storyId).firstOrNull { it.seq == messageIndex }
-                ?: throw BadRequestException("메시지 위치가 올바르지 않습니다: $messageIndex")
-        }
+        val pivot = messageRepository.findByIdAndStoryId(messageId, storyId)
+            ?: throw NotFoundException("이 스토리의 메시지가 아닙니다: $messageId")
         val copied = messageRepository.findByStoryIdOrderBySeqAsc(storyId).filter { it.seq <= pivot.seq }
 
         val scenarioName = source.scenario.name

@@ -46,7 +46,7 @@
 `dir_name`은 생성 시각 밀리초 문자열이다. 기존 방식과 같다.
 
 - **옛 스토리 이전(T09):** `story.json`이 없는 스토리를 위 구조로 옮긴다. 옛 `chat/`, `memory/`는 지우지 않고 스토리 폴더의 `legacy/` 아래로 옮긴다. `_legacy` 스토리는 새 `stories/{밀리초}`로 옮기고 `dir_name`을 바꾼다. 실행은 `crack.migration.legacy.enabled=true`(기동 시) 또는 `POST /api/admin/migrate-legacy`.
-- **분기(T09):** `POST /api/stories/{id}/branch` body `{title, messageId}`. 스토리 폴더를 통째로 복사하고(`memory/history`, `legacy/` 제외) 메시지는 기준 메시지의 seq까지 후보와 함께 복사한다. 과도기(T11 전)에는 `messageId` 대신 `messageIndex`(= seq)도 받는다. T12에서 `messageIndex`를 없앤다.
+- **분기(T09):** `POST /api/stories/{id}/branch` body `{title, messageId}`. 스토리 폴더를 통째로 복사하고(`memory/history`, `legacy/` 제외) 메시지는 기준 메시지의 seq까지 후보와 함께 복사한다. `messageId`는 필수다(없으면 400). 과도기 필드 `messageIndex`는 T12에서 없앴다.
 
 ## 3. DB 스키마
 

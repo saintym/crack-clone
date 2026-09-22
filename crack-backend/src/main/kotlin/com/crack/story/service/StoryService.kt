@@ -1,6 +1,5 @@
 package com.crack.story.service
 
-import com.crack.chat.service.ChatFileService
 import com.crack.global.config.DataPaths
 import com.crack.global.exception.NotFoundException
 import com.crack.scenario.repository.ScenarioRepository
@@ -25,7 +24,6 @@ class StoryService(
     private val storyRepository: StoryRepository,
     private val scenarioRepository: ScenarioRepository,
     private val dataPaths: DataPaths,
-    private val chatFileService: ChatFileService,
     private val prologueService: PrologueService
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
