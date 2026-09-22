@@ -1,6 +1,6 @@
 package com.crack.scenario.service
 
-import com.crack.global.config.DataPathConfig
+import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import com.crack.scenario.dto.ScenarioCreateRequest
@@ -18,10 +18,10 @@ import java.nio.file.StandardCopyOption
 @Transactional(readOnly = true)
 class ScenarioService(
     private val scenarioRepository: ScenarioRepository,
-    private val dataPathConfig: DataPathConfig
+    private val dataPaths: DataPaths
 ) {
     private val templateDir: Path
-        get() = Path.of(dataPathConfig.dataPath, "_templates")
+        get() = dataPaths.templatesDir()
 
     @Transactional
     fun create(request: ScenarioCreateRequest): ScenarioResponse {
@@ -29,14 +29,13 @@ class ScenarioService(
             throw BadRequestException("시나리오 '${request.name}'이(가) 이미 존재합니다.")
         }
 
-        val scenarioDir = Path.of(dataPathConfig.dataPath, request.name)
+        val scenarioDir = dataPaths.scenarioDir(request.name)
         initScenarioDirectory(scenarioDir)
 
         val scenario = scenarioRepository.save(
             Scenario(
                 name = request.name,
-                title = request.title,
-                dataPath = scenarioDir.toString()
+                title = request.title
             )
         )
         return ScenarioResponse.from(scenario)
@@ -58,7 +57,7 @@ class ScenarioService(
         val scenario = scenarioRepository.findByName(name)
             ?: throw NotFoundException("시나리오 '$name'을(를) 찾을 수 없습니다.")
 
-        val scenarioDir = Path.of(scenario.dataPath)
+        val scenarioDir = dataPaths.scenarioDir(scenario.name)
         if (Files.exists(scenarioDir)) {
             Files.walk(scenarioDir)
                 .sorted(Comparator.reverseOrder())

@@ -2,6 +2,8 @@ package com.crack.memory
 
 import com.crack.ai.service.AiGateway
 import com.crack.chat.service.ChatFileService
+import com.crack.global.config.DataPathConfig
+import com.crack.global.config.DataPaths
 import com.crack.memory.service.MemoryService
 import com.crack.memory.service.StorySummaryService
 import com.crack.scenario.entity.Scenario
@@ -23,6 +25,8 @@ class MemoryServiceTest {
     private lateinit var scenarioRepository: ScenarioRepository
     private lateinit var storyRepository: StoryRepository
     private lateinit var storySummaryService: StorySummaryService
+    private lateinit var dataRoot: Path
+    /** 스토리 폴더: {dataRoot}/테스트/stories/1 */
     private lateinit var tempDir: Path
 
     private val testStoryId = 1L
@@ -30,7 +34,8 @@ class MemoryServiceTest {
 
     @BeforeEach
     fun setUp() {
-        tempDir = Files.createTempDirectory("crack-memory-test")
+        dataRoot = Files.createTempDirectory("crack-memory-test")
+        tempDir = Files.createDirectories(dataRoot.resolve("테스트/stories/1"))
         aiGateway = mock()
         scenarioRepository = mock()
         storyRepository = mock()
@@ -42,7 +47,8 @@ class MemoryServiceTest {
             chatFileService = chatFileService,
             scenarioRepository = scenarioRepository,
             storyRepository = storyRepository,
-            storySummaryService = storySummaryService
+            storySummaryService = storySummaryService,
+            dataPaths = DataPaths(DataPathConfig(dataPath = dataRoot.toString()))
         )
 
         // 스토리 디렉토리 생성
@@ -58,15 +64,17 @@ class MemoryServiceTest {
             id = testStoryId,
             scenarioId = testScenarioId,
             title = "테스트",
-            dataPath = tempDir.toString(),
+            dirName = "1",
             turnCount = 10
         )
         whenever(storyRepository.findById(testStoryId)).thenReturn(Optional.of(testStory))
+        whenever(scenarioRepository.findById(testScenarioId))
+            .thenReturn(Optional.of(Scenario(id = testScenarioId, name = "테스트", title = "테스트")))
     }
 
     @AfterEach
     fun tearDown() {
-        Files.walk(tempDir)
+        Files.walk(dataRoot)
             .sorted(Comparator.reverseOrder())
             .forEach { Files.deleteIfExists(it) }
     }
@@ -164,7 +172,7 @@ class MemoryServiceTest {
     @Test
     fun `요약 실행 시 summary 파일이 생성된다`() {
         // given
-        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
+        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트")
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
         whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약된 내용입니다. 주인공이 하은을 만났습니다.")
 
@@ -190,7 +198,7 @@ class MemoryServiceTest {
     @Test
     fun `요약 실행 후 chat_latest가 초기화된다`() {
         // given
-        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
+        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트")
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
         whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약")
 
@@ -208,7 +216,7 @@ class MemoryServiceTest {
     @Test
     fun `요약 실행 후 대화가 아카이브에 저장된다`() {
         // given
-        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
+        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트")
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
         whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약")
 
@@ -226,12 +234,12 @@ class MemoryServiceTest {
 
     @Test
     fun `요약 실행 시 캐릭터 문서가 갱신된다`() {
-        // given - scenarioDataPath에 캐릭터 파일 생성
-        val scenarioDir = tempDir.resolve("scenario_base")
+        // given - 시나리오 원본 폴더에 캐릭터 파일 생성
+        val scenarioDir = dataRoot.resolve("테스트")
         Files.createDirectories(scenarioDir.resolve("characters"))
         Files.writeString(scenarioDir.resolve("characters/하은.md"), "# 캐릭터: 하은\n\n## 주요 사건 기록\n")
 
-        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = scenarioDir.toString())
+        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트")
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
         whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("갱신된 캐릭터 문서 내용")
 
@@ -253,12 +261,12 @@ class MemoryServiceTest {
             id = testStoryId,
             scenarioId = testScenarioId,
             title = "테스트",
-            dataPath = tempDir.toString(),
+            dirName = "1",
             turnCount = 20
         )
         whenever(storyRepository.findById(testStoryId)).thenReturn(Optional.of(testStory20))
 
-        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트", dataPath = tempDir.toString())
+        val testScenario = Scenario(id = testScenarioId, name = "테스트", title = "테스트")
         whenever(scenarioRepository.findById(testScenarioId)).thenReturn(Optional.of(testScenario))
         whenever(aiGateway.chat(any(), anyOrNull())).thenReturn("요약")
 

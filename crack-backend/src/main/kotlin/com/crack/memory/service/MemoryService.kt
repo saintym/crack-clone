@@ -6,6 +6,7 @@ import com.crack.ai.dto.ChatMessage
 import com.crack.ai.dto.MessageRole
 import com.crack.ai.service.AiGateway
 import com.crack.chat.service.ChatFileService
+import com.crack.global.config.DataPaths
 import com.crack.global.exception.NotFoundException
 import com.crack.memory.dto.SummarizeResult
 import com.crack.memory.dto.SummaryResponse
@@ -22,7 +23,8 @@ class MemoryService(
     private val chatFileService: ChatFileService,
     private val scenarioRepository: ScenarioRepository,
     private val storyRepository: StoryRepository,
-    private val storySummaryService: StorySummaryService
+    private val storySummaryService: StorySummaryService,
+    private val dataPaths: DataPaths
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -91,7 +93,7 @@ class MemoryService(
         val scenario = scenarioRepository.findById(story.scenarioId)
             .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다.") }
 
-        val storyPath = Path.of(story.dataPath)
+        val storyPath = dataPaths.storyDir(scenario.name, story.dirName)
         val turnCount = story.turnCount
         val fromTurn = ((turnCount - 1) / TURNS_PER_SUMMARY) * TURNS_PER_SUMMARY + 1
         val toTurn = fromTurn + TURNS_PER_SUMMARY - 1
@@ -117,7 +119,7 @@ class MemoryService(
         }
 
         // 5. 캐릭터 문서 갱신 (스토리 오버라이드 폴더에 저장)
-        val updatedCharacters = updateCharacterDocuments(storyPath, scenario.dataPath, summary, fromTurn, toTurn)
+        val updatedCharacters = updateCharacterDocuments(storyPath, dataPaths.scenarioDir(scenario.name), summary, fromTurn, toTurn)
 
         // 6. 대화 아카이브
         chatFileService.archiveChat(storyPath, fromTurn, toTurn, chatContent)
@@ -153,12 +155,12 @@ class MemoryService(
 
     private fun updateCharacterDocuments(
         storyPath: Path,
-        scenarioDataPath: String,
+        scenarioDir: Path,
         summary: String,
         fromTurn: Int,
         toTurn: Int
     ): List<String> {
-        val baseCharDir = Path.of(scenarioDataPath).resolve("characters")
+        val baseCharDir = scenarioDir.resolve("characters")
         if (!Files.exists(baseCharDir)) return emptyList()
 
         val storyCharDir = storyPath.resolve("characters")
@@ -219,7 +221,9 @@ class MemoryService(
     private fun storyDir(storyId: Long): Path {
         val story = storyRepository.findById(storyId)
             .orElseThrow { NotFoundException("스토리를 찾을 수 없습니다: $storyId") }
-        return Path.of(story.dataPath)
+        val scenario = scenarioRepository.findById(story.scenarioId)
+            .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다.") }
+        return dataPaths.storyDir(scenario.name, story.dirName)
     }
 
     private fun mustRememberPath(storyId: Long): Path =

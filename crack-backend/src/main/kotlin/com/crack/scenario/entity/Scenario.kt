@@ -16,9 +16,6 @@ class Scenario(
     @Column(nullable = false)
     var title: String,
 
-    @Column(name = "data_path", nullable = false)
-    val dataPath: String,
-
     @Column
     @Enumerated(EnumType.STRING)
     var status: ScenarioStatus = ScenarioStatus.ACTIVE,

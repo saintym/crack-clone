@@ -13,7 +13,6 @@ data class ScenarioResponse(
     val id: Long,
     val name: String,
     val title: String,
-    val dataPath: String,
     val status: ScenarioStatus,
     val createdAt: LocalDateTime,
     val updatedAt: LocalDateTime
@@ -23,7 +22,6 @@ data class ScenarioResponse(
             id = scenario.id,
             name = scenario.name,
             title = scenario.title,
-            dataPath = scenario.dataPath,
             status = scenario.status,
             createdAt = scenario.createdAt,
             updatedAt = scenario.updatedAt

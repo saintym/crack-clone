@@ -24,7 +24,7 @@ class SettingServiceTest {
     private lateinit var settingService: SettingService
 
     private val testScenario = Scenario(
-        id = 1L, name = "test-scenario", title = "Test", dataPath = "/tmp/test"
+        id = 1L, name = "test-scenario", title = "Test"
     )
 
     @BeforeEach
