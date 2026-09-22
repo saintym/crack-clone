@@ -188,10 +188,10 @@ class MessageService {
 | GET | `/messages` | `{ story: {turnCount, recordedThroughTurn, generating}, messages: MessageView[] }` |
 | POST | `/messages` (SSE) | body `{content, provider?, command?}`. 유저 메시지를 저장한 뒤 응답을 생성한다 |
 | POST | `/messages/continue` (SSE) | body `{provider?}`. 가상 지시로 이어쓰기하며, 지시문은 저장하지 않는다 |
-| POST | `/messages/regenerate` (SSE) | body `{provider?, instruction?}`. 마지막 ASSISTANT에 후보를 추가한다. 마지막이 USER면 첫 응답을 생성한다 |
+| POST | `/messages/regenerate` (SSE) | body `{provider?, instruction?, messageId?}`. 마지막 ASSISTANT에 후보를 추가한다. 마지막이 USER면 첫 응답을 생성한다. `messageId`를 주면 대화의 마지막 메시지여야 한다(아니면 400). 프롤로그는 400 |
 | PUT | `/messages/{id}/variant` | body `{index}`. 후보 선택 (가장 최근 ASSISTANT만) |
 | PATCH | `/messages/{id}` | body `{content}`. 수정 (역할 무관) |
-| DELETE | `/messages/{id}` | 이 메시지부터 끝까지 삭제 |
+| DELETE | `/messages/{id}` | 이 메시지부터 끝까지 삭제. 응답 `{storyId, minTruncatedTurn, deletedCount, turnCount}` |
 | GET | `/messages/export` | 마크다운 내보내기 (`text/markdown`) |
 
 `MessageView = {id, seq, turn, role, kind, content, variantIndex, variantCount, edited, createdAt}`. `emotion`은 **넣지 않는다**(§5.3).
@@ -200,7 +200,8 @@ class MessageService {
 
 - **서버가 저장한다.** 프로바이더의 `onComplete`에서 트랜잭션으로 저장한 뒤 `done`을 보낸다. 클라이언트가 끊겨도 저장된다. `/chat/complete`는 없앤다.
 - **실패 시 원본 보존.** 재생성이 실패하면 아무것도 바뀌지 않는다(후보는 성공했을 때만 추가). 전송이 실패하면 유저 메시지는 남고, 클라이언트는 `regenerate`로 다시 시도한다.
-- **스토리별 동시 생성 금지.** 생성 중이면 409를 돌려준다(`StoryGenerationLock`).
+- **스토리별 동시 생성 금지.** 생성 중이면 409를 돌려준다(`StoryGenerationLock`). 생성 중에는 후보 선택·수정·삭제도 409다(T07).
+- 에러 응답 본문은 SSE 경로도 JSON `{message, status}`다. `POST /messages/continue`는 대화가 비었거나 마지막이 USER면 400이다.
 - **저장 후 훅.** ASSISTANT를 저장한 뒤 `AfterTurnHook` 빈들을 호출한다. T14가 여기에 10턴 트리거를 건다.
 - 기존 `/chat/*` 경로는 T11이 프론트를 옮긴 뒤 T12에서 삭제한다. T07은 새 경로만 추가하고 기존 경로는 그대로 둔다.
 - **재생성은 가장 최근 ASSISTANT 메시지만** 대상으로 한다(D17). 과거 메시지 재생성 요청은 400을 돌려준다.
