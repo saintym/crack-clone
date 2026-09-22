@@ -3,6 +3,7 @@ package com.crack.chat.flow
 import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
 import com.crack.ai.service.AiGateway
+import com.crack.command.CommandService
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import com.crack.memory.record.MemoryRecordService
@@ -33,6 +34,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
  *   (생성 도중 대화가 바뀌어 응답이 엉뚱한 자리에 저장되는 것을 막는다).
  * - 감정 태그는 [EmotionTagFilter]가 스트림에서 떼어 내고 `emotion` 칼럼에만 저장한다(§5.3).
  * - 프롬프트는 [PromptAssembler](v2, DESIGN.md §6)가 만든다. 이번 턴 지시는 BOTTOM 슬롯(`[지시]` 블록)으로 들어간다.
+ * - 사용자 정의 `/` 명령(T16, DESIGN.md §8.2)은 유저 메시지를 `COMMAND`로 저장하고, 명령 프롬프트를 그 턴의 지시로만 넣는다.
+ *   그 턴을 재생성할 때도 같은 지시를 다시 넣는다.
  * - 매 턴 응답 전에 LLM을 추가로 호출하지 않는다. 옛 10턴 자동 요약은 제거했다(기억은 T14가 [AfterTurnHook]으로 연결).
  */
 @Service
@@ -45,6 +48,7 @@ class ChatFlowService(
     private val generationLock: StoryGenerationLock,
     private val afterTurnHooks: ObjectProvider<AfterTurnHook>,
     private val memoryRecordService: MemoryRecordService,
+    private val commandService: CommandService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -66,15 +70,24 @@ class ChatFlowService(
 
     // ---- 생성 (SSE) ----
 
-    /** 유저 메시지를 저장하고 `user` 이벤트를 보낸 뒤 응답을 생성한다. [command]는 T16 전까지 무시한다. */
-    fun send(storyId: Long, content: String?, provider: String?, @Suppress("UNUSED_PARAMETER") command: String?): SseEmitter {
+    /**
+     * 유저 메시지를 저장하고 `user` 이벤트를 보낸 뒤 응답을 생성한다.
+     *
+     * @param command 사용자 정의 `/` 명령 이름(앞의 `/`는 있어도 된다). 주면 유저 메시지를 `kind = COMMAND`로 저장하고
+     *   명령 프롬프트와 인자를 이번 턴 지시로 넣는다. 모르는 명령이나 시스템 명령이면 400이고 아무것도 저장하지 않는다.
+     */
+    fun send(storyId: Long, content: String?, provider: String?, command: String? = null): SseEmitter {
         if (content.isNullOrBlank()) throw BadRequestException("메시지 내용이 비어 있습니다")
         val story = requireStory(storyId)
+        val custom = command?.takeIf { it.isNotBlank() }?.let { commandService.requireCustom(storyId, it) }
+        val turnInstruction = custom?.let { CommandService.turnInstruction(it, content) }
+        val kind = if (custom != null) MessageKind.COMMAND else MessageKind.NORMAL
         return withGeneration(storyId) { ticket ->
-            val user = messageService.appendUser(storyId, content)
+            val user = messageService.appendUser(storyId, content, kind)
             val emitter = newEmitter()
             sendEarly(emitter, SseEvents.USER, messageService.view(user))
-            launch(story, ticket, emitter, provider, GenerationMode.SEND, { promptAssembler.assemble(storyId) }) { body, emotion ->
+            launch(story, ticket, emitter, provider, GenerationMode.SEND,
+                { promptAssembler.assemble(storyId, turnInstruction = turnInstruction) }) { body, emotion ->
                 messageService.appendAssistant(storyId, body, emotion, MessageKind.NORMAL, turnNo = user.turnNo)
             }
             emitter
@@ -99,8 +112,9 @@ class ChatFlowService(
             }
             val emitter = newEmitter()
             if (last.role == MessageRole.USER) {
+                val turnInstruction = ConversationBuilder.combine(commandInstructionFor(storyId, last), trimmedInstruction)
                 launch(story, ticket, emitter, provider, GenerationMode.REGENERATE,
-                    { promptAssembler.assemble(storyId, turnInstruction = trimmedInstruction) }) { body, emotion ->
+                    { promptAssembler.assemble(storyId, turnInstruction = turnInstruction) }) { body, emotion ->
                     messageService.appendAssistant(storyId, body, emotion, MessageKind.NORMAL, turnNo = last.turnNo)
                 }
             } else {
@@ -108,7 +122,9 @@ class ChatFlowService(
                 val turnInstruction = if (last.kind == MessageKind.CONTINUATION) {
                     ConversationBuilder.combine(ConversationBuilder.CONTINUE_INSTRUCTION, trimmedInstruction)
                 } else {
-                    trimmedInstruction
+                    val user = messageRepository.findByStoryIdAndTurnNoBetweenOrderBySeqAsc(storyId, last.turnNo, last.turnNo)
+                        .firstOrNull { it.role == MessageRole.USER && it.seq < last.seq }
+                    ConversationBuilder.combine(user?.let { commandInstructionFor(storyId, it) }, trimmedInstruction)
                 }
                 launch(story, ticket, emitter, provider, GenerationMode.REGENERATE,
                     { promptAssembler.assemble(storyId, beforeSeq = last.seq, turnInstruction = turnInstruction) }) { body, emotion ->
@@ -215,6 +231,22 @@ class ChatFlowService(
         } catch (e: Exception) {
             log.error("응답 생성 준비 실패: storyId=${story.id}", e)
             listener.onError(e)
+        }
+    }
+
+    /**
+     * 재생성용: 저장된 유저 메시지가 `COMMAND`면 그 명령의 이번 턴 지시를 다시 만든다(DESIGN.md §8.2).
+     * 명령을 찾지 못하면 지시 없이 생성한다(재생성 자체는 막지 않는다).
+     */
+    private fun commandInstructionFor(storyId: Long, user: StoryMessage): String? {
+        if (user.kind != MessageKind.COMMAND) return null
+        return try {
+            commandService.instructionForStored(storyId, user.content).also {
+                if (it == null) log.warn("재생성: 명령을 찾지 못해 지시 없이 생성합니다: storyId={}, messageId={}", storyId, user.id)
+            }
+        } catch (e: Exception) {
+            log.warn("재생성: 명령 지시를 만들지 못했습니다: storyId={}, messageId={}", storyId, user.id, e)
+            null
         }
     }
 

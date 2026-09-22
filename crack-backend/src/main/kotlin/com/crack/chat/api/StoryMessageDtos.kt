@@ -1,6 +1,6 @@
 package com.crack.chat.api
 
-/** `POST /messages` body. [command]는 T16(`/` 명령)이 쓴다. 지금은 받기만 한다. */
+/** `POST /messages` body. [command]는 사용자 정의 `/` 명령 이름(T16, DESIGN.md §8.2). */
 data class SendMessageRequest(
     val content: String? = null,
     val provider: String? = null,
