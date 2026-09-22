@@ -7,7 +7,7 @@ import com.crack.chat.dto.ChatRequest
 import com.crack.chat.dto.ParsedResponse
 import com.crack.global.config.DataPaths
 import com.crack.global.exception.NotFoundException
-import com.crack.prompt.service.PromptAssembler
+import com.crack.prompt.service.LegacyPromptAssembler
 import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.entity.Story
 import com.crack.story.repository.StoryRepository
@@ -26,7 +26,7 @@ import java.time.LocalDateTime
 @Service
 class ChatService(
     private val aiGateway: AiGateway,
-    private val promptAssembler: PromptAssembler,
+    private val promptAssembler: LegacyPromptAssembler,
     private val chatFileService: ChatFileService,
     private val messageParser: MessageParser,
     private val scenarioRepository: ScenarioRepository,

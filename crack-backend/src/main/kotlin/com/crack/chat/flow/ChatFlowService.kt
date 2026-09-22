@@ -2,9 +2,7 @@ package com.crack.chat.flow
 
 import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
-import com.crack.ai.dto.ChatMessage
 import com.crack.ai.service.AiGateway
-import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import com.crack.message.dto.MessageView
@@ -14,8 +12,8 @@ import com.crack.message.entity.MessageRole
 import com.crack.message.entity.StoryMessage
 import com.crack.message.repository.StoryMessageRepository
 import com.crack.message.service.MessageService
+import com.crack.prompt.service.AssembledPrompt
 import com.crack.prompt.service.PromptAssembler
-import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.entity.Story
 import com.crack.story.repository.StoryRepository
 import org.slf4j.LoggerFactory
@@ -32,6 +30,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
  * - **스토리당 생성 1개.** 생성 중에는 새 생성뿐 아니라 후보 선택·수정·삭제도 409로 막는다
  *   (생성 도중 대화가 바뀌어 응답이 엉뚱한 자리에 저장되는 것을 막는다).
  * - 감정 태그는 [EmotionTagFilter]가 스트림에서 떼어 내고 `emotion` 칼럼에만 저장한다(§5.3).
+ * - 프롬프트는 [PromptAssembler](v2, DESIGN.md §6)가 만든다. 이번 턴 지시는 BOTTOM 슬롯(`[지시]` 블록)으로 들어간다.
  * - 매 턴 응답 전에 LLM을 추가로 호출하지 않는다. 옛 10턴 자동 요약은 제거했다(기억은 T14가 [AfterTurnHook]으로 연결).
  */
 @Service
@@ -39,10 +38,7 @@ class ChatFlowService(
     private val messageService: MessageService,
     private val messageRepository: StoryMessageRepository,
     private val storyRepository: StoryRepository,
-    private val scenarioRepository: ScenarioRepository,
-    private val dataPaths: DataPaths,
     private val promptAssembler: PromptAssembler,
-    private val conversationBuilder: ConversationBuilder,
     private val aiGateway: AiGateway,
     private val generationLock: StoryGenerationLock,
     private val afterTurnHooks: ObjectProvider<AfterTurnHook>,
@@ -74,7 +70,7 @@ class ChatFlowService(
             val user = messageService.appendUser(storyId, content)
             val emitter = newEmitter()
             sendEarly(emitter, SseEvents.USER, messageService.view(user))
-            launch(story, ticket, emitter, provider, GenerationMode.SEND, { conversationBuilder.build(storyId) }) { body, emotion ->
+            launch(story, ticket, emitter, provider, GenerationMode.SEND, { promptAssembler.assemble(storyId) }) { body, emotion ->
                 messageService.appendAssistant(storyId, body, emotion, MessageKind.NORMAL, turnNo = user.turnNo)
             }
             emitter
@@ -100,7 +96,7 @@ class ChatFlowService(
             val emitter = newEmitter()
             if (last.role == MessageRole.USER) {
                 launch(story, ticket, emitter, provider, GenerationMode.REGENERATE,
-                    { conversationBuilder.build(storyId, turnInstruction = trimmedInstruction) }) { body, emotion ->
+                    { promptAssembler.assemble(storyId, turnInstruction = trimmedInstruction) }) { body, emotion ->
                     messageService.appendAssistant(storyId, body, emotion, MessageKind.NORMAL, turnNo = last.turnNo)
                 }
             } else {
@@ -111,7 +107,7 @@ class ChatFlowService(
                     trimmedInstruction
                 }
                 launch(story, ticket, emitter, provider, GenerationMode.REGENERATE,
-                    { conversationBuilder.build(storyId, beforeSeq = last.seq, turnInstruction = turnInstruction) }) { body, emotion ->
+                    { promptAssembler.assemble(storyId, beforeSeq = last.seq, turnInstruction = turnInstruction) }) { body, emotion ->
                     messageService.addVariant(last.id, body, emotion, trimmedInstruction)
                 }
             }
@@ -130,7 +126,7 @@ class ChatFlowService(
             }
             val emitter = newEmitter()
             launch(story, ticket, emitter, provider, GenerationMode.CONTINUE,
-                { conversationBuilder.build(storyId, turnInstruction = ConversationBuilder.CONTINUE_INSTRUCTION) }) { body, emotion ->
+                { promptAssembler.assemble(storyId, turnInstruction = ConversationBuilder.CONTINUE_INSTRUCTION) }) { body, emotion ->
                 messageService.appendAssistant(storyId, body, emotion, MessageKind.CONTINUATION)
             }
             emitter
@@ -193,7 +189,7 @@ class ChatFlowService(
         emitter: SseEmitter,
         provider: String?,
         mode: GenerationMode,
-        messages: () -> List<ChatMessage>,
+        prompt: () -> AssembledPrompt,
         save: (body: String, emotion: String?) -> StoryMessage,
     ) {
         val listener = GenerationStreamListener(
@@ -205,9 +201,10 @@ class ChatFlowService(
         )
         val filter = EmotionTagFilter(listener)
         try {
+            val assembled = prompt()
             val request = AiRequest(
-                systemPrompt = systemPrompt(story),
-                messages = messages(),
+                systemPrompt = assembled.systemPrompt,
+                messages = assembled.messages,
                 purpose = AiPurpose.CHAT,
             )
             aiGateway.stream(request, filter, provider)
@@ -215,14 +212,6 @@ class ChatFlowService(
             log.error("응답 생성 준비 실패: storyId=${story.id}", e)
             listener.onError(e)
         }
-    }
-
-    private fun systemPrompt(story: Story): String {
-        val scenario = scenarioRepository.findById(story.scenarioId)
-            .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다: ${story.scenarioId}") }
-        val storyDir = dataPaths.storyDir(scenario.name, story.dirName)
-        // 본문은 T08이 스토리 폴더만 읽도록 바꾼다. 여기서는 호출만 한다.
-        return promptAssembler.assembleSystemPrompt(dataPaths.scenarioDir(scenario.name), storyDir)
     }
 
     private fun runAfterTurnHooks(storyId: Long, saved: MessageView, mode: GenerationMode) {

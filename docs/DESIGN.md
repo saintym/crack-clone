@@ -224,10 +224,12 @@ AI는 응답 첫 줄에 `[감정: 경계심, 호기심]`을 쓴다. 이 태그�
 T13 이후 `PromptAssembler`는 **섹션 기여자(contributor)** 구조를 쓴다. 뒤따르는 기능(T16 지시, T17 키워드북, T20 이미지)이 조립기 본체를 고치지 않고 빈 하나만 추가하면 되게 하려는 것이다.
 
 ```kotlin
+// 패키지 com.crack.prompt.contributor
 interface PromptContributor {
     val slot: PromptSlot          // 아래 순서
-    val order: Int                // 같은 slot 안의 순서
-    fun contribute(ctx: PromptContext): String?   // null이면 생략
+    val order: Int                // 같은 slot 안의 순서 (작을수록 먼저)
+    val name: String get() = …    // 섹션 이름(로그·preview용). 기본값은 클래스 이름에서 Contributor를 뗀 값 (T13 추가)
+    fun contribute(ctx: PromptContext): String?   // null이나 공백이면 생략
 }
 enum class PromptSlot { BASE, WORLD, SCENARIO, PROTAGONIST, CHARACTERS, KEYWORDS, USER_NOTE, IMAGES, BOTTOM }
 
@@ -238,20 +240,57 @@ data class PromptContext(
     val userInput: String?,
     val turnInstruction: String?,  // 이어쓰기, 재생성 지시, / 명령의 이번 턴 한정 지시
 )
+
+// 패키지 com.crack.prompt.context — "마지막 기록 턴" 출처. T14가 구현 빈을 등록한다
+interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 ```
 
 **조립 결과:** `system` = BASE…IMAGES 슬롯. `messages` = 대화 원문(§6.1) + 맨 끝 유저 메시지. **BOTTOM 슬롯**(지속 OOC 지시, 이번 턴 지시)은 마지막 유저 메시지 **앞에** `[지시]` 블록으로 붙인다. 가장 강하게 반영되는 위치다.
 
+- 기여자는 `(slot, order)` 순으로 부른다. system 섹션끼리는 빈 줄로 잇는다. 기여자가 예외를 던지면 그 섹션만 빼고 로그를 남긴다(응답 생성은 계속한다).
+- BOTTOM 기여 여러 개는 빈 줄로 이어 `[지시]\n…` 블록 하나로 만든다. 마지막 메시지가 ASSISTANT(이어쓰기 등)면 `[지시]`만 담은 USER 메시지를 덧붙인다.
+- `recentText` = 이번 입력을 뺀 대화의 최근 `crack.prompt.keyword-scan-messages`(기본 6)개 메시지 + 이번 입력. 원문 범위(§6.1)와 무관하게 전체 대화에서 고른다.
+- `userInput` = 대화의 마지막 메시지가 USER면 그 내용(재생성 대상 앞까지 기준), 아니면 null.
+- 진입점: `PromptAssembler.assemble(storyId, beforeSeq?, turnInstruction?, pendingInput?)` → `AssembledPrompt(systemPrompt, messages, sections, activeCharacters, rawWindow)`. `pendingInput`은 저장하지 않은 가상 유저 입력(preview용).
+- **기본 기여자(T13)**
+
+  | slot | order | name | 내용 |
+  |---|---|---|---|
+  | BASE | 0 | `base` | 기본 규칙 + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그 §5.3) |
+  | WORLD | 0 | `world` | `world.md` |
+  | SCENARIO | 0 | `scenario` | `scenario.md` |
+  | SCENARIO | 100 | `chronicle` | `chronicle.md`의 `## 장 요약` + 최근 회차 원문. 최신 회차부터 거꾸로 `crack.memory.budget.chronicle` 안에서 담고(가장 최근 회차 하나는 넘어도 넣는다), 파일 순서(오래된 것부터)로 쓴다 |
+  | PROTAGONIST | 0 | `protagonist` | `characters/protagonist.md` |
+  | CHARACTERS | 0 | `characters` | 활성 인물 문서 전문(§6.2) |
+  | USER_NOTE | 0 | `user_note` | `user_note.md` (없으면 T09 이전 옛 위치 `memory/must_remember.md`) |
+  | BOTTOM | 100 | `turn_instruction` | `turnInstruction` |
+
+  뒤따르는 기능은 빈만 추가한다: T17 `KEYWORDS`, T20 `IMAGES`, T16 지속 지시는 `BOTTOM` order 0(이번 턴 지시보다 먼저).
+
 ### 6.1 대화 원문 범위
-- `turn_no > recorded_through_turn - overlap` (overlap 기본 2턴)
-- 기록이 계속 실패해도 폭주하지 않도록 상한을 둔다: 최근 `max-raw-turns`(기본 30턴)
-- 프롤로그는 turn 0이므로 기록 전에는 포함되고, 첫 기록 이후에는 빠진다
+- `turn_no > recorded_through_turn - overlap` (overlap 기본 2턴, `crack.prompt.overlap-turns`)
+- 기록이 계속 실패해도 폭주하지 않도록 상한을 둔다: 최근 `max-raw-turns`(기본 30턴, `crack.prompt.max-raw-turns`). 기준은 넣을 메시지 중 최대 턴이다(`turn_no > 최대 턴 - max-raw-turns`).
+- 프롤로그는 turn 0이므로 기록 전에는 포함되고, 첫 기록 이후에는 빠진다(`recorded_through_turn >= 1`이면 turn 0은 항상 뺀다)
+- `recorded_through_turn`은 `RecordedTurnSource` 빈에서 읽는다. 빈이 없으면 0(T14 전). 로직은 `ConversationBuilder`(chat/flow)에 있다.
 
 ### 6.2 활성 인물 선택 (D9)
 `state.json.companions` ∪ `KeywordMatcher`가 `recentText`에서 찾은 인물(파일명과 `별칭`). 주인공은 항상 포함한다.
+- 순서: 동행 인물(`companions` 순서) → 키워드로 찾은 인물(파일명 순). 중복은 한 번만.
+- `companions`의 이름은 파일명과 먼저 비교하고, 없으면 별칭과 정확히 같은 인물을 쓴다. 둘 다 없으면 버린다.
+- 구현: `prompt.contributor.ActiveCharacterSelector`.
 
 ### 6.3 크기 측정
 조립할 때마다 섹션별 글자 수를 INFO 로그로 남긴다. `GET /api/stories/{id}/prompt-preview`로 섹션별 크기와 전문을 돌려준다(포트폴리오 지표와 디버깅용).
+- 쿼리 `input`(선택): 저장하지 않은 가상 유저 입력. 다음 전송 때의 프롬프트를 미리 본다. 없으면 지금 대화 그대로(마지막이 USER면 그 응답을 만들 때의 프롬프트).
+- 응답(T13 확정):
+  ```
+  { storyId, totalChars, systemChars, messageChars,
+    sections: [{slot, name, chars, content}],          // 조립 순서, BOTTOM 포함
+    activeCharacters: ["설월"],
+    rawWindow: {recordedThroughTurn, afterTurn, messageCount},   // afterTurn: 이 턴 초과만 넣었다
+    systemPrompt, messages: [{role, content}] }         // messages는 [지시]가 붙은 최종 형태
+  ```
+  `totalChars = systemChars + messageChars`. 글자 수는 Kotlin `String.length`(UTF-16 코드 유닛)다.
 
 ## 7. 기억 시스템 v2 (T05 포맷, T14 파이프라인)
 
