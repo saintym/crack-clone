@@ -9,6 +9,8 @@ import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.dto.StoryCreateRequest
 import com.crack.story.entity.Story
 import com.crack.story.entity.StoryStatus
+import com.crack.story.files.SampleScenario
+import com.crack.story.files.StoryFiles
 import com.crack.story.repository.StoryRepository
 import com.crack.story.service.StoryService
 import org.junit.jupiter.api.*
@@ -43,11 +45,7 @@ class StoryServiceTest {
             .forEach { Files.deleteIfExists(it) }
     }
 
-    @Test
-    fun `스토리 생성 시 디렉토리 구조가 생성된다`() {
-        // given
-        val scenario = Scenario(id = 1L, name = "test", title = "Test")
-        whenever(scenarioRepository.findById(1L)).thenReturn(Optional.of(scenario))
+    private fun stubSave() {
         whenever(storyRepository.save(any<Story>())).thenAnswer { invocation ->
             val story = invocation.getArgument<Story>(0)
             Story(
@@ -58,6 +56,15 @@ class StoryServiceTest {
                 turnCount = story.turnCount
             )
         }
+    }
+
+    @Test
+    fun `스토리 생성 시 시나리오 원본을 스토리 폴더로 복사한다`() {
+        // given
+        val scenarioDir = SampleScenario.copyTo(tempDir.resolve("test"))
+        val scenario = Scenario(id = 1L, name = "test", title = "Test")
+        whenever(scenarioRepository.findById(1L)).thenReturn(Optional.of(scenario))
+        stubSave()
 
         // when
         val result = storyService.create(1L, StoryCreateRequest(title = "새 이야기"))
@@ -68,14 +75,31 @@ class StoryServiceTest {
         assertEquals(0, result.turnCount)
 
         // 생성된 디렉토리 확인: {data-path}/{scenario.name}/stories/{dirName}
-        verify(storyRepository).save(argThat<Story> {
-            val path = tempDir.resolve("test/stories").resolve(dirName)
-            dirName.all { it.isDigit() } &&
-                Files.exists(path.resolve("chat/chat_latest.md")) &&
-                Files.exists(path.resolve("memory/must_remember.md")) &&
-                Files.exists(path.resolve("characters")) &&
-                Files.exists(path.resolve("chat/archive"))
-        })
+        val captor = argumentCaptor<Story>()
+        verify(storyRepository).save(captor.capture())
+        val dirName = captor.firstValue.dirName
+        assertTrue(dirName.all { it.isDigit() })
+        val path = tempDir.resolve("test/stories").resolve(dirName)
+        assertEquals(Files.readString(scenarioDir.resolve("characters/설월.md")), Files.readString(path.resolve("characters/설월.md")))
+        assertTrue(Files.exists(path.resolve("world.md")))
+        assertTrue(Files.exists(path.resolve("user_note.md")))
+        assertTrue(Files.exists(path.resolve("story.json")))
+        assertFalse(Files.exists(path.resolve("images.md")))
+        assertFalse(Files.exists(path.resolve("memory/must_remember.md")), "옛 must_remember는 만들지 않는다")
+    }
+
+    @Test
+    fun `DB 저장이 실패하면 만든 스토리 폴더를 지운다`() {
+        SampleScenario.copyTo(tempDir.resolve("test"))
+        whenever(scenarioRepository.findById(1L)).thenReturn(Optional.of(Scenario(id = 1L, name = "test", title = "Test")))
+        whenever(storyRepository.save(any<Story>())).thenThrow(IllegalStateException("DB 오류"))
+
+        assertThrows<IllegalStateException> { storyService.create(1L, StoryCreateRequest(title = "실패")) }
+
+        val storiesDir = tempDir.resolve("test/stories")
+        val leftovers = if (Files.exists(storiesDir)) Files.list(storiesDir).use { it.toList() } else emptyList()
+        assertTrue(leftovers.isEmpty(), "고아 스토리 폴더가 남으면 안 된다: $leftovers")
+        assertTrue(Files.exists(tempDir.resolve("test/world.md")))
     }
 
     @Test
@@ -160,6 +184,32 @@ class StoryServiceTest {
         // then
         assertFalse(Files.exists(storyDir), "스토리 디렉토리가 삭제되어야 한다")
         verify(storyRepository).delete(story)
+    }
+
+    @Test
+    fun `스토리 삭제 시 원본과 다른 스토리는 그대로다`() {
+        // given
+        val scenarioDir = SampleScenario.copyTo(tempDir.resolve("test"))
+        val a = scenarioDir.resolve("stories/1")
+        val b = scenarioDir.resolve("stories/2")
+        StoryFiles.initFromScenario(scenarioDir, a)
+        StoryFiles.initFromScenario(scenarioDir, b)
+        val story = Story(id = 1L, scenarioId = 1L, title = "A", dirName = "1")
+        whenever(storyRepository.findById(1L)).thenReturn(Optional.of(story))
+        whenever(scenarioRepository.findById(1L)).thenReturn(Optional.of(Scenario(id = 1L, name = "test", title = "Test")))
+
+        // when
+        storyService.delete(1L)
+
+        // then
+        assertFalse(Files.exists(a))
+        assertTrue(Files.exists(b.resolve("characters/설월.md")))
+        Files.walk(SampleScenario.source).use { stream ->
+            stream.filter { Files.isRegularFile(it) }.forEach { src ->
+                val rel = SampleScenario.source.relativize(src).toString()
+                assertEquals(Files.readString(src), Files.readString(scenarioDir.resolve(rel)), "원본 불변: $rel")
+            }
+        }
     }
 
     @Test

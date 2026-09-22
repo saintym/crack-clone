@@ -49,13 +49,22 @@ class PromptAssembler {
 *그림자의 주인은 입꼬리를 살짝 올리며 걸음을 멈추었다. 달빛 아래 드러난 얼굴에는 장난기와 위험이 동시에 서려 있었다.*
 """
         private const val MAX_SUMMARY_COUNT = 5
+        private const val CHARACTERS_DIR = "characters"
+        private const val PROTAGONIST_FILE = "protagonist.md"
+        private const val USER_NOTE_FILE = "user_note.md"
+        /** T08 이전 스토리(와 `_legacy`)의 유저노트 위치. T09가 `user_note.md`로 옮긴다. */
+        private const val LEGACY_MUST_REMEMBER = "memory/must_remember.md"
     }
 
     /**
-     * 시스템 프롬프트 조립.
-     * scenarioPath: 시나리오 템플릿 경로 (world.md, scenario.md, characters/)
-     * storyPath: 스토리 데이터 경로 (memory/, chat/) - 캐릭터 오버라이드도 여기 우선
+     * 시스템 프롬프트 조립 (DESIGN.md §6, D12 스토리 격리).
+     *
+     * **스토리 폴더([storyPath])만 읽는다.** [scenarioPath]는 호출부 호환을 위해 남긴 인자이고 쓰지 않는다.
+     * 스토리 폴더에 파일이 없어도 시나리오 원본으로 폴백하지 않는다. 원본은 스토리를 만들 때 복사하는 용도로만 쓴다.
+     *
+     * @param activeCharacters 넣을 인물 이름(파일명). null이면 스토리 `characters/`의 인물 전부(주인공 제외)
      */
+    @Suppress("UNUSED_PARAMETER")
     fun assembleSystemPrompt(scenarioPath: Path, storyPath: Path, activeCharacters: List<String>? = null): String {
         val parts = mutableListOf<String>()
 
@@ -63,50 +72,56 @@ class PromptAssembler {
         parts.add(BASE_RULE)
 
         // 2. 세계관
-        readFileIfExists(scenarioPath.resolve("world.md"))?.let { content ->
+        readFileIfExists(storyPath.resolve("world.md"))?.let { content ->
             parts.add("=== 세계관 ===\n$content")
         }
 
-        // 3. 캐릭터 설정 (스토리 오버라이드 우선, 없으면 시나리오 기본)
-        val baseCharDir = scenarioPath.resolve("characters")
-        val storyCharDir = storyPath.resolve("characters")
-        if (activeCharacters != null) {
-            activeCharacters.forEach { charName ->
-                val content = readFileIfExists(storyCharDir.resolve("$charName.md"))
-                    ?: readFileIfExists(baseCharDir.resolve("$charName.md"))
-                content?.let { parts.add("=== 캐릭터: $charName ===\n$it") }
-            }
-        } else if (Files.exists(baseCharDir)) {
-            // 기본 캐릭터 목록에서 로드하되, 스토리 오버라이드 우선
-            Files.list(baseCharDir)
-                .filter { it.toString().endsWith(".md") && it.fileName.toString() != "protagonist.md" }
-                .forEach { path ->
-                    val charName = path.fileName.toString().removeSuffix(".md")
-                    val content = readFileIfExists(storyCharDir.resolve("$charName.md"))
-                        ?: Files.readString(path)
-                    parts.add("=== 캐릭터: $charName ===\n$content")
-                }
+        // 3. 캐릭터 설정 (스토리 폴더의 인물 문서)
+        val charDir = storyPath.resolve(CHARACTERS_DIR)
+        val characterNames = activeCharacters?.filter { isSafeCharacterName(it) } ?: listCharacterNames(charDir)
+        characterNames.forEach { charName ->
+            readFileIfExists(charDir.resolve("$charName.md"))?.let { parts.add("=== 캐릭터: $charName ===\n$it") }
         }
 
-        // 4. 주인공 설정 (스토리 오버라이드 우선)
-        val protagonistContent = readFileIfExists(storyCharDir.resolve("protagonist.md"))
-            ?: readFileIfExists(baseCharDir.resolve("protagonist.md"))
-        protagonistContent?.let { parts.add("=== 주인공(사용자) ===\n$it") }
+        // 4. 주인공 설정
+        readFileIfExists(charDir.resolve(PROTAGONIST_FILE))?.let { parts.add("=== 주인공(사용자) ===\n$it") }
 
         // 5. 시나리오 초기 상황
-        readFileIfExists(scenarioPath.resolve("scenario.md"))?.let { content ->
+        readFileIfExists(storyPath.resolve("scenario.md"))?.let { content ->
             parts.add("=== 시나리오 ===\n$content")
         }
 
-        // 6. 필수 기억사항 (스토리에 저장)
-        readFileIfExists(storyPath.resolve("memory/must_remember.md"))?.let { content ->
-            parts.add("=== 필수 기억사항 ===\n$content")
+        // 6. 유저노트 (user_note.md, 없으면 T09 이전 전의 옛 스토리가 쓰던 같은 스토리 폴더의 memory/must_remember.md)
+        readUserNote(storyPath)?.let { content ->
+            parts.add("=== 유저노트 ===\n$content")
         }
 
         // 7. 출력 형식
         parts.add(OUTPUT_FORMAT)
 
         return parts.joinToString("\n\n")
+    }
+
+    private fun listCharacterNames(charDir: Path): List<String> {
+        if (!Files.isDirectory(charDir)) return emptyList()
+        return Files.list(charDir).use { stream ->
+            stream.map { it.fileName.toString() }
+                .filter { it.endsWith(".md") && it != PROTAGONIST_FILE && !it.startsWith(".") }
+                .map { it.removeSuffix(".md") }
+                .sorted()
+                .toList()
+        }
+    }
+
+    /** 요청으로 들어온 인물 이름이 `characters/` 밖을 가리키지 못하게 한다. */
+    private fun isSafeCharacterName(name: String): Boolean =
+        name.isNotBlank() && name != "." && name != ".." &&
+            !name.contains('/') && !name.contains('\\') && !name.contains('\u0000')
+
+    private fun readUserNote(storyPath: Path): String? {
+        val userNote = storyPath.resolve(USER_NOTE_FILE)
+        if (Files.exists(userNote)) return readFileIfExists(userNote)
+        return readFileIfExists(storyPath.resolve(LEGACY_MUST_REMEMBER))
     }
 
     fun loadConversationContext(storyPath: Path): List<ChatMessage> {

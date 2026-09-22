@@ -29,7 +29,7 @@ class PromptAssemblerTest {
         Files.createDirectories(storyPath.resolve("memory"))
         Files.createDirectories(storyPath.resolve("chat"))
 
-        Files.writeString(scenarioPath.resolve("world.md"), """
+        Files.writeString(storyPath.resolve("world.md"), """
             # 세계관
             ## 시대
             현대 서울, 2026년
@@ -39,13 +39,13 @@ class PromptAssemblerTest {
             밝고 활기찬 대학 생활
         """.trimIndent())
 
-        Files.writeString(scenarioPath.resolve("scenario.md"), """
+        Files.writeString(storyPath.resolve("scenario.md"), """
             # 시나리오
             ## 초기 상황
             새 학기 첫 날, 주인공이 강의실에 들어선다.
         """.trimIndent())
 
-        Files.writeString(scenarioPath.resolve("characters/protagonist.md"), """
+        Files.writeString(storyPath.resolve("characters/protagonist.md"), """
             # 주인공
             ## 기본 정보
             - 이름: 김민수
@@ -54,7 +54,7 @@ class PromptAssemblerTest {
             조용하고 내성적
         """.trimIndent())
 
-        Files.writeString(scenarioPath.resolve("characters/하은.md"), """
+        Files.writeString(storyPath.resolve("characters/하은.md"), """
             # 캐릭터: 하은
             ## 기본 정보
             - 이름: 하은
@@ -65,7 +65,7 @@ class PromptAssemblerTest {
             반말, 가끔 "~거든!" 으로 끝남
         """.trimIndent())
 
-        Files.writeString(scenarioPath.resolve("characters/준호.md"), """
+        Files.writeString(storyPath.resolve("characters/준호.md"), """
             # 캐릭터: 준호
             ## 기본 정보
             - 이름: 준호
@@ -74,8 +74,8 @@ class PromptAssemblerTest {
             쾌활하고 다정한 형 같은 존재
         """.trimIndent())
 
-        Files.writeString(storyPath.resolve("memory/must_remember.md"), """
-            # 필수 기억사항
+        Files.writeString(storyPath.resolve("user_note.md"), """
+            # 유저노트
             - 하은은 3턴에서 주인공에게 이름을 가르쳐줬다
             - 주인공은 왼팔에 화상 흉터가 있다
         """.trimIndent())
@@ -132,11 +132,73 @@ class PromptAssemblerTest {
     }
 
     @Test
-    fun `시스템 프롬프트에 필수 기억사항이 포함된다`() {
+    fun `시스템 프롬프트에 유저노트가 포함된다`() {
         val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath)
 
-        assertTrue(prompt.contains("필수 기억사항"), "필수 기억사항 섹션이 있어야 한다")
-        assertTrue(prompt.contains("왼팔에 화상 흉터"), "필수 기억 내용이 포함되어야 한다")
+        assertTrue(prompt.contains("=== 유저노트 ==="), "유저노트 섹션이 있어야 한다")
+        assertTrue(prompt.contains("왼팔에 화상 흉터"), "유저노트 내용이 포함되어야 한다")
+    }
+
+    // --- 스토리 격리 (D12) ---
+
+    @Test
+    fun `스토리 폴더만 읽고 시나리오 원본은 읽지 않는다`() {
+        Files.writeString(scenarioPath.resolve("world.md"), "원본 세계관 ORIGINAL_WORLD")
+        Files.writeString(scenarioPath.resolve("scenario.md"), "원본 시나리오 ORIGINAL_SCENARIO")
+        Files.writeString(scenarioPath.resolve("characters/하은.md"), "원본 하은 ORIGINAL_HAEUN")
+        Files.writeString(scenarioPath.resolve("characters/원본전용.md"), "# 캐릭터: 원본전용")
+        Files.writeString(scenarioPath.resolve("characters/protagonist.md"), "원본 주인공 ORIGINAL_PROTAGONIST")
+
+        val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath)
+
+        assertFalse(prompt.contains("ORIGINAL_"), "시나리오 원본 내용이 섞이면 안 된다")
+        assertFalse(prompt.contains("원본전용"), "원본에만 있는 인물은 넣지 않는다")
+        assertTrue(prompt.contains("현대 서울") && prompt.contains("츤데레") && prompt.contains("김민수"))
+    }
+
+    @Test
+    fun `스토리 폴더에 파일이 없어도 시나리오로 폴백하지 않는다`() {
+        Files.delete(storyPath.resolve("world.md"))
+        Files.delete(storyPath.resolve("characters/protagonist.md"))
+        Files.writeString(scenarioPath.resolve("world.md"), "원본 세계관 ORIGINAL_WORLD")
+        Files.writeString(scenarioPath.resolve("characters/protagonist.md"), "원본 주인공 ORIGINAL_PROTAGONIST")
+
+        val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath, listOf("하은", "없는인물"))
+
+        assertFalse(prompt.contains("=== 세계관 ==="))
+        assertFalse(prompt.contains("=== 주인공(사용자) ==="))
+        assertFalse(prompt.contains("ORIGINAL_"))
+        assertFalse(prompt.contains("없는인물"))
+    }
+
+    @Test
+    fun `user_note가 없는 옛 스토리는 같은 폴더의 must_remember를 읽는다`() {
+        Files.delete(storyPath.resolve("user_note.md"))
+        Files.writeString(storyPath.resolve("memory/must_remember.md"), "옛 기억 LEGACY_NOTE")
+
+        val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath)
+
+        assertTrue(prompt.contains("LEGACY_NOTE"))
+    }
+
+    @Test
+    fun `user_note가 있으면 must_remember는 읽지 않는다`() {
+        Files.writeString(storyPath.resolve("memory/must_remember.md"), "옛 기억 LEGACY_NOTE")
+
+        val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath)
+
+        assertFalse(prompt.contains("LEGACY_NOTE"))
+    }
+
+    @Test
+    fun `인물 이름으로 characters 밖의 파일을 읽을 수 없다`() {
+        Files.writeString(tempDir.resolve("secret.md"), "SECRET")
+        Files.writeString(storyPath.resolve("world2.md"), "SECRET2")
+
+        val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath, listOf("../../secret", "../world2", "하은"))
+
+        assertFalse(prompt.contains("SECRET"))
+        assertTrue(prompt.contains("캐릭터: 하은"))
     }
 
     @Test

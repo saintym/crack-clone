@@ -13,10 +13,15 @@ import java.nio.file.StandardCopyOption
 class DocumentService(
     private val dataPaths: DataPaths
 ) {
+    /** 시나리오 원본 문서 타입 (DESIGN.md §2, §9). 선택 문서(prologue, keywords, commands, images)는 없을 수 있다. */
     enum class DocumentType(val fileName: String) {
         WORLD("world.md"),
         SCENARIO("scenario.md"),
-        PROTAGONIST("characters/protagonist.md")
+        PROTAGONIST("characters/protagonist.md"),
+        PROLOGUE("prologue.md"),
+        KEYWORDS("keywords.md"),
+        COMMANDS("commands.md"),
+        IMAGES("images.md")
     }
 
     fun readDocument(scenarioName: String, type: DocumentType): DocumentResponse {
