@@ -23,6 +23,7 @@ v2로 대체되었거나 쓰이지 않는 코드와 테이블을 지운다.
 - 프론트의 남은 옛 API 호출
 - 분기 요청의 과도기 필드 `messageIndex`(T09) 제거. `StoryService`에 남은 `chatFileService` 의존성 제거
 - 옛 `ChatService`(T07에서 `@Deprecated` 처리)와 `ChatRequest`
+- **버그 수정(삭제 아님): [BUG-006](../../bugs/BUG-006_시나리오_등록시_원본_문서_덮어쓰기.md).** `ScenarioService.copyTemplate`이 기존 파일을 덮어쓰지 않게 하고 회귀 테스트를 추가한다. `bugs/README.md` 상태를 갱신한다
 - **보안 보강(삭제 아님):** `DocumentService.characterPath(charName)`가 이름을 검사하지 않는다(T08 발견). `DataPaths`처럼 경로 조각 하나만 허용하도록 검증을 추가하고, 테스트를 붙인다
 
 ## 구현 내용
