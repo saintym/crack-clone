@@ -3,6 +3,14 @@
 뤼튼 **크랙(Crack)** 을 재현한 개인 취미 프로젝트 — **AI 캐릭터 채팅 앱**입니다.
 캐릭터·세계관·시나리오를 설정하면 Claude 기반 AI가 인캐릭터로 응답하고, 대화 맥락을 문서 기반 기억 시스템으로 유지합니다.
 
+## 문서
+
+- [docs/HANDOFF.md](docs/HANDOFF.md) — 현재 상태와 인수인계 (먼저 읽기)
+- [Plan-roadmap.md](Plan-roadmap.md) — 결정 사항과 로드맵 · [Plan-crack-gap.md](Plan-crack-gap.md) — 원작 기능 격차 분석
+- [docs/DESIGN.md](docs/DESIGN.md) — 기술 설계(작업 간 계약) · [docs/tasks/](docs/tasks/README.md) — 작업 명세와 기록
+- [docs/PARALLEL.md](docs/PARALLEL.md) — 병렬 작업 운영 · [docs/ORCHESTRATION-LOG.md](docs/ORCHESTRATION-LOG.md) — 구현 중 겪은 오류 기록
+- [bugs/](bugs/README.md) — 버그 트래커 · [blog/](blog/README.md) — 개발기
+
 ## 핵심 특징
 
 - **문서(마크다운) 기반 관리** — 세계관/등장인물/주인공/필수기억을 파일로 관리

@@ -1,5 +1,7 @@
 # 작업 보드
 
+> **T00~T21 전부 `DONE`(2026-09-23).** 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
+
 > 설계: [docs/DESIGN.md](../DESIGN.md) · 병렬 운영(worktree, 일정, 머지): [docs/PARALLEL.md](../PARALLEL.md) · 결정 사항: [Plan-roadmap.md](../../Plan-roadmap.md) · 에이전트 규칙: [CLAUDE.md](../../CLAUDE.md)
 
 ## 진행 방식
