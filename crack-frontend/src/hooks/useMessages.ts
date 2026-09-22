@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { chatApi, errorMessage, isConflict } from '../api/chat';
 import type { Message, MessagesResponse } from '../types/chat';
+import type { MemoryStatus } from '../api/memory';
 
 /** 서버가 생성 중일 때(`generating`, 409) 목록을 다시 확인하는 간격 */
 const BUSY_POLL_MS = 2500;
@@ -15,12 +16,15 @@ interface LoadedState {
   messages: Message[];
   /** 서버가 이 스토리에서 응답을 생성 중이다. 입력과 메시지 조작을 잠근다 */
   busy: boolean;
+  /** 받은 시점의 기억 기록 상태 (`story.memory`). 기억 뱃지의 기준값이다 */
+  memory: MemoryStatus;
 }
 
 const fromResponse = (storyId: number, data: MessagesResponse): LoadedState => ({
   storyId,
   messages: data.messages,
   busy: data.story.generating,
+  memory: data.story.memory,
 });
 
 /** id가 같으면 교체하고, 없으면 seq 순서에 맞춰 넣는다 */
@@ -46,6 +50,7 @@ export function useMessages(storyId: number, onChanged: () => void) {
   const messages = current?.messages ?? EMPTY;
   const busy = current?.busy ?? false;
   const loaded = current !== null;
+  const memory = current?.memory ?? null;
 
   /** 해당 스토리의 상태일 때만 고친다 */
   const update = useCallback((sid: number, fn: (s: LoadedState) => LoadedState) => {
@@ -154,7 +159,7 @@ export function useMessages(storyId: number, onChanged: () => void) {
   const clearError = useCallback(() => setError(null), []);
 
   return {
-    messages, loaded, busy, error, clearError,
+    messages, loaded, busy, memory, error, clearError,
     reload, markBusy, applyMessage, editMessage, selectVariant, deleteFrom,
   };
 }

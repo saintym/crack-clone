@@ -14,6 +14,9 @@ import MessageList from '../components/chat/MessageList';
 import ChatInput from '../components/chat/ChatInput';
 import BranchDialog from '../components/chat/BranchDialog';
 import SidePanel from '../components/panels/SidePanel';
+import { useMemoryStatus } from '../components/panels/memory/useMemoryStatus';
+import { memoryPanelTab } from '../components/panels/memory/memoryPanelTab';
+import MemoryBadge from '../components/panels/memory/MemoryBadge';
 import type { SidePanelTab } from '../types/panel';
 
 /** 채팅 화면. 상태는 훅에, 화면 조각은 components/chat에 두고 여기서는 조립만 한다. */
@@ -40,7 +43,10 @@ export default function ChatPage() {
   const [branching, setBranching] = useState<{ messageId: number; title: string; error?: string } | null>(null);
 
   // 오른쪽 패널 탭. T15(기억), T18(지시), T19(상태)가 여기에 추가한다. 비어 있으면 여는 버튼을 숨긴다.
-  const panelTabs: SidePanelTab[] = [];
+  // 기억 뱃지: 턴이 끝나거나 메시지가 지워질 때(생성 중이 아닐 때 마지막 메시지가 바뀌면) 기록 상태를 다시 확인한다
+  const memoryKey = chat.loaded && !streaming ? `${chat.messages.length}:${chat.messages.at(-1)?.id}` : null;
+  const memory = useMemoryStatus(storyId, chat.memory, memoryKey);
+  const panelTabs: SidePanelTab[] = [memoryPanelTab(storyId, memory)];
   const [panelOpen, setPanelOpen] = useState(false);
 
   const locked = streaming || chat.busy || !chat.loaded;
@@ -80,6 +86,7 @@ export default function ChatPage() {
           selectedProvider={selectedProvider}
           onSelectProvider={setSelectedProvider}
           onOpenPanel={panelTabs.length > 0 ? () => setPanelOpen(true) : undefined}
+          panelBadge={<MemoryBadge status={memory.status} />}
         />
 
         <ImageCatalogContext.Provider value={imageCatalog}>
