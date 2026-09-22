@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Scenario } from '../../api/scenarios';
 
@@ -11,11 +12,13 @@ interface ChatHeaderProps {
   onSelectProvider: (provider: string) => void;
   /** 주면 오른쪽 패널(SidePanel)을 여는 버튼을 보인다. 탭이 없으면 넘기지 않는다 */
   onOpenPanel?: () => void;
+  /** 패널 버튼 오른쪽 위에 겹쳐 보일 작은 뱃지 (T15 기억 뱃지). 흐름을 끊지 않는 표시만 넣는다 */
+  panelBadge?: ReactNode;
 }
 
 /** 채팅 상단 바: 사이드바 열기, 뒤로 가기, 스토리 제목, AI 프로바이더 선택 */
 export default function ChatHeader({
-  title, scenario, onOpenSidebar, providers, selectedProvider, onSelectProvider, onOpenPanel,
+  title, scenario, onOpenSidebar, providers, selectedProvider, onSelectProvider, onOpenPanel, panelBadge,
 }: ChatHeaderProps) {
   const navigate = useNavigate();
   const [showProviderMenu, setShowProviderMenu] = useState(false);
@@ -49,12 +52,13 @@ export default function ChatHeader({
           <button
             onClick={onOpenPanel}
             title="패널"
-            className="text-text-secondary hover:text-text-primary p-1"
+            className="relative text-text-secondary hover:text-text-primary p-1"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <rect x="3" y="4" width="18" height="16" rx="2" />
               <path d="M15 4v16" />
             </svg>
+            {panelBadge && <span className="absolute top-0 right-0 pointer-events-none">{panelBadge}</span>}
           </button>
         )}
 
