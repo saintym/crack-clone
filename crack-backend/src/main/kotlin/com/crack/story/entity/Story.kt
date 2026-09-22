@@ -16,8 +16,9 @@ class Story(
     @Column(nullable = false)
     var title: String,
 
-    @Column(name = "data_path", nullable = false)
-    val dataPath: String,
+    /** 스토리 폴더 이름. 경로는 DataPaths.storyDir(scenario.name, dirName)으로 계산한다. `_legacy`는 시나리오 폴더 자체. */
+    @Column(name = "dir_name", nullable = false, length = 64)
+    val dirName: String,
 
     @Column(name = "turn_count")
     var turnCount: Int = 0,

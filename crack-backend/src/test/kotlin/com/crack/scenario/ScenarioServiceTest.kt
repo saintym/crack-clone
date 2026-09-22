@@ -1,6 +1,7 @@
 package com.crack.scenario
 
 import com.crack.global.config.DataPathConfig
+import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import com.crack.scenario.dto.ScenarioCreateRequest
@@ -37,7 +38,7 @@ class ScenarioServiceTest {
 
         scenarioRepository = mock()
         dataPathConfig = DataPathConfig(dataPath = tempDir.toString())
-        scenarioService = ScenarioService(scenarioRepository, dataPathConfig)
+        scenarioService = ScenarioService(scenarioRepository, DataPaths(dataPathConfig))
     }
 
     @AfterEach
@@ -57,8 +58,7 @@ class ScenarioServiceTest {
             Scenario(
                 id = 1L,
                 name = scenario.name,
-                title = scenario.title,
-                dataPath = scenario.dataPath
+                title = scenario.title
             )
         }
 
@@ -115,8 +115,7 @@ class ScenarioServiceTest {
         Files.writeString(scenarioDir.resolve("world.md"), "# 세계관")
 
         val scenario = Scenario(
-            id = 1L, name = "삭제대상", title = "삭제 테스트",
-            dataPath = scenarioDir.toString()
+            id = 1L, name = "삭제대상", title = "삭제 테스트"
         )
         whenever(scenarioRepository.findByName("삭제대상")).thenReturn(scenario)
 
@@ -143,8 +142,8 @@ class ScenarioServiceTest {
     fun `ACTIVE 상태 시나리오만 목록에 반환된다`() {
         // given
         val scenarios = listOf(
-            Scenario(id = 1L, name = "s1", title = "S1", dataPath = "/tmp/s1"),
-            Scenario(id = 2L, name = "s2", title = "S2", dataPath = "/tmp/s2")
+            Scenario(id = 1L, name = "s1", title = "S1"),
+            Scenario(id = 2L, name = "s2", title = "S2")
         )
         whenever(scenarioRepository.findByStatus(ScenarioStatus.ACTIVE)).thenReturn(scenarios)
 

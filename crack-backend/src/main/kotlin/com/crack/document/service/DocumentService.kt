@@ -1,7 +1,7 @@
 package com.crack.document.service
 
 import com.crack.document.dto.DocumentResponse
-import com.crack.global.config.DataPathConfig
+import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import org.springframework.stereotype.Service
@@ -11,7 +11,7 @@ import java.nio.file.StandardCopyOption
 
 @Service
 class DocumentService(
-    private val dataPathConfig: DataPathConfig
+    private val dataPaths: DataPaths
 ) {
     enum class DocumentType(val fileName: String) {
         WORLD("world.md"),
@@ -128,7 +128,7 @@ class DocumentService(
     // --- internal ---
 
     private fun scenarioDir(scenarioName: String): Path =
-        Path.of(dataPathConfig.dataPath, scenarioName)
+        dataPaths.scenarioDir(scenarioName)
 
     private fun resolveDocumentPath(scenarioName: String, fileName: String): Path =
         scenarioDir(scenarioName).resolve(fileName)
@@ -143,7 +143,7 @@ class DocumentService(
     }
 
     private fun loadCharacterTemplate(charName: String): String {
-        val templatePath = Path.of(dataPathConfig.dataPath, "_templates/character.md")
+        val templatePath = dataPaths.templatesDir().resolve("character.md")
         return if (Files.exists(templatePath)) {
             Files.readString(templatePath).replace("(이름)", charName)
         } else {

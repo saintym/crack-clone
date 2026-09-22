@@ -5,6 +5,7 @@ import com.crack.ai.dto.AiRequest
 import com.crack.ai.service.AiGateway
 import com.crack.chat.dto.ChatRequest
 import com.crack.chat.dto.ParsedResponse
+import com.crack.global.config.DataPaths
 import com.crack.global.exception.NotFoundException
 import com.crack.memory.service.MemoryService
 import com.crack.prompt.service.PromptAssembler
@@ -26,7 +27,8 @@ class ChatService(
     private val messageParser: MessageParser,
     private val scenarioRepository: ScenarioRepository,
     private val storyRepository: StoryRepository,
-    private val memoryService: MemoryService
+    private val memoryService: MemoryService,
+    private val dataPaths: DataPaths
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -35,8 +37,8 @@ class ChatService(
         val scenario = scenarioRepository.findById(story.scenarioId)
             .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다.") }
 
-        val storyPath = Path.of(story.dataPath)
-        val scenarioPath = Path.of(scenario.dataPath)
+        val storyPath = storyPath(story)
+        val scenarioPath = dataPaths.scenarioDir(scenario.name)
 
         // 1. 사용자 메시지를 chat_latest.md에 기록
         chatFileService.appendUserMessage(storyPath, request.message)
@@ -68,7 +70,7 @@ class ChatService(
         }
 
         val story = findStory(storyId)
-        val storyPath = Path.of(story.dataPath)
+        val storyPath = storyPath(story)
 
         chatFileService.appendAssistantMessage(storyPath, fullResponse)
         story.turnCount += 1
@@ -95,18 +97,18 @@ class ChatService(
 
     fun getChatHistory(storyId: Long): String {
         val story = findStory(storyId)
-        return chatFileService.readChatLatest(Path.of(story.dataPath))
+        return chatFileService.readChatLatest(storyPath(story))
     }
 
     fun editMessage(storyId: Long, messageIndex: Int, newContent: String): List<ChatFileService.ChatMessage> {
         val story = findStory(storyId)
-        return chatFileService.editMessage(Path.of(story.dataPath), messageIndex, newContent)
+        return chatFileService.editMessage(storyPath(story), messageIndex, newContent)
     }
 
     @Transactional
     fun deleteMessagesFrom(storyId: Long, messageIndex: Int): List<ChatFileService.ChatMessage> {
         val story = findStory(storyId)
-        val remaining = chatFileService.deleteMessagesFrom(Path.of(story.dataPath), messageIndex)
+        val remaining = chatFileService.deleteMessagesFrom(storyPath(story), messageIndex)
         // Recalculate turn count (number of assistant messages)
         val newTurnCount = remaining.count { it.role == "assistant" }
         story.turnCount = newTurnCount
@@ -118,7 +120,7 @@ class ChatService(
     @Transactional
     fun regenerate(storyId: Long, request: ChatRequest): SseEmitter {
         val story = findStory(storyId)
-        val storyPath = Path.of(story.dataPath)
+        val storyPath = storyPath(story)
 
         // Remove last assistant message
         chatFileService.removeLastAssistantMessage(storyPath)
@@ -129,7 +131,7 @@ class ChatService(
         // Re-stream with the existing last user message
         val scenario = scenarioRepository.findById(story.scenarioId)
             .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다.") }
-        val scenarioPath = Path.of(scenario.dataPath)
+        val scenarioPath = dataPaths.scenarioDir(scenario.name)
 
         val systemPrompt = promptAssembler.assembleSystemPrompt(scenarioPath, storyPath, request.activeCharacters)
         val conversationMessages = promptAssembler.loadConversationContext(storyPath)
@@ -150,8 +152,8 @@ class ChatService(
         val scenario = scenarioRepository.findById(story.scenarioId)
             .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다.") }
 
-        val storyPath = Path.of(story.dataPath)
-        val scenarioPath = Path.of(scenario.dataPath)
+        val storyPath = storyPath(story)
+        val scenarioPath = dataPaths.scenarioDir(scenario.name)
 
         // Append a system-like user message to prompt continuation
         chatFileService.appendUserMessage(storyPath, "계속 이어서 작성해주세요.")
@@ -168,6 +170,12 @@ class ChatService(
         val emitter = SseEmitter(300_000L)
         aiGateway.stream(aiRequest, SseStreamListener(emitter), request.provider)
         return emitter
+    }
+
+    private fun storyPath(story: Story): Path {
+        val scenario = scenarioRepository.findById(story.scenarioId)
+            .orElseThrow { NotFoundException("시나리오를 찾을 수 없습니다.") }
+        return dataPaths.storyDir(scenario.name, story.dirName)
     }
 
     private fun findStory(storyId: Long): Story =

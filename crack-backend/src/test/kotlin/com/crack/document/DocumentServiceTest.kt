@@ -3,6 +3,7 @@ package com.crack.document
 import com.crack.document.service.DocumentService
 import com.crack.document.service.DocumentService.DocumentType
 import com.crack.global.config.DataPathConfig
+import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import org.junit.jupiter.api.*
@@ -32,7 +33,7 @@ class DocumentServiceTest {
         Files.writeString(scenarioDir.resolve("scenario.md"), "# 시나리오\n\n대학 캠퍼스")
         Files.writeString(scenarioDir.resolve("characters/protagonist.md"), "# 주인공\n\n김철수")
 
-        documentService = DocumentService(DataPathConfig(dataPath = tempDir.toString()))
+        documentService = DocumentService(DataPaths(DataPathConfig(dataPath = tempDir.toString())))
     }
 
     @AfterEach
