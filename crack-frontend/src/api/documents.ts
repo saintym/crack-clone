@@ -6,6 +6,16 @@ export interface DocumentResponse {
   content: string;
 }
 
+/** `/scenarios/{name}/documents/{type}`의 type. 백엔드 `DocumentService.DocumentType`과 같다. */
+export type ScenarioDocumentType =
+  | 'world'
+  | 'scenario'
+  | 'protagonist'
+  | 'prologue'
+  | 'keywords'
+  | 'commands'
+  | 'images';
+
 export interface CharacterInfo {
   type: string;
   name: string;
@@ -13,10 +23,10 @@ export interface CharacterInfo {
 }
 
 export const documentApi = {
-  get: (scenarioName: string, type: string) =>
+  get: (scenarioName: string, type: ScenarioDocumentType) =>
     api.get<DocumentResponse>(`/scenarios/${scenarioName}/documents/${type}`),
 
-  update: (scenarioName: string, type: string, content: string) =>
+  update: (scenarioName: string, type: ScenarioDocumentType, content: string) =>
     api.put(`/scenarios/${scenarioName}/documents/${type}`, { content }),
 
   getCharacter: (scenarioName: string, charName: string) =>

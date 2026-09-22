@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { documentApi, type CharacterInfo } from '../api/documents';
+import { documentApi, type CharacterInfo, type ScenarioDocumentType } from '../api/documents';
 import MobileLayout from '../components/layout/MobileLayout';
 
-type Tab = 'world' | 'scenario' | 'characters' | 'protagonist';
+type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist';
 
 export default function ScenarioDetailPage() {
   const { scenarioName } = useParams<{ scenarioName: string }>();
@@ -34,7 +34,7 @@ export default function ScenarioDetailPage() {
   // setState를 then 콜백 안에서 호출해야 react-hooks/set-state-in-effect가
   // 비동기 갱신으로 인식한다 (async/await 본문은 동기 호출로 판정됨).
   const loadDocument = useCallback(
-    (type: string) =>
+    (type: ScenarioDocumentType) =>
       documentApi
         .get(scenarioName!, type)
         .then(({ data }) => setContent(data.content))
@@ -76,7 +76,7 @@ export default function ScenarioDetailPage() {
     try {
       if (selectedChar) {
         await documentApi.updateCharacter(scenarioName, selectedChar, editContent);
-      } else {
+      } else if (tab !== 'characters') {
         await documentApi.update(scenarioName, tab, editContent);
       }
       setContent(editContent);
@@ -114,6 +114,7 @@ export default function ScenarioDetailPage() {
   const tabs: { key: Tab; label: string }[] = [
     { key: 'world', label: '세계관' },
     { key: 'scenario', label: '시나리오' },
+    { key: 'prologue', label: '첫 메시지' },
     { key: 'protagonist', label: '주인공' },
     { key: 'characters', label: '캐릭터' },
   ];
@@ -211,6 +212,13 @@ export default function ScenarioDetailPage() {
               </button>
             )}
 
+            {tab === 'prologue' && (
+              <p className="text-xs text-text-muted mb-3 leading-relaxed">
+                스토리를 시작하면 AI의 첫 메시지로 들어갑니다. {'{{user}}'}는 주인공 이름으로 바뀌고,
+                비워 두면 첫 메시지 없이 시작합니다. 이미 만든 스토리에는 반영되지 않습니다.
+              </p>
+            )}
+
             {editing ? (
               <>
                 <textarea
@@ -237,7 +245,11 @@ export default function ScenarioDetailPage() {
             ) : (
               <>
                 <div className="flex-1 p-5 bg-surface border border-border/40 rounded-2xl text-sm text-text-secondary whitespace-pre-wrap overflow-y-auto font-mono min-h-[200px] leading-relaxed">
-                  {content || <span className="text-text-muted italic">(비어있음)</span>}
+                  {content || (
+                    <span className="text-text-muted italic">
+                      {tab === 'prologue' ? '(없음: 첫 메시지 없이 시작)' : '(비어있음)'}
+                    </span>
+                  )}
                 </div>
                 <button
                   onClick={() => { setEditContent(content); setEditing(true); }}
