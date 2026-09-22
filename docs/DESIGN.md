@@ -134,6 +134,7 @@ interface AiProvider {
     val name: String
     fun chat(request: AiRequest): String
     fun stream(request: AiRequest, listener: StreamListener)   // 비동기. 리스너는 정확히 한 번 complete 또는 error
+    fun isAvailable(): Boolean = true                           // API 키 없음 등으로 쓸 수 없으면 false (T01에서 추가)
 }
 
 @Component
@@ -143,6 +144,8 @@ class AiGateway(registry: AiProviderRegistry) {   // 앱 코드는 모두 이것
 }
 ```
 
+- 지정한 프로바이더가 없거나 사용할 수 없으면 기본 프로바이더로 대체하고 warn 로그를 남긴다. 게이트웨이는 리스너를 `SafeStreamListener`로 감싸 종료 콜백이 정확히 한 번 가도록 보장한다.
+- 설정 키: `crack.ai.default-provider`, `crack.ai.purpose-tiers.*`, `crack.ai.cli.path|timeout-seconds|models.*`, `crack.ai.fake.enabled`. 옛 `crack.ai.claude-cli-path`는 쓰지 않는다.
 - **SseEmitter는 AI 계층에서 없앤다.** SSE 변환은 채팅 계층(T07)이 한다.
 - **모든 AI 호출은 `AiGateway`를 거친다.** `ClaudeService` 직접 호출을 금지한다. 기본 프로바이더(CLI)에서도 기억 기록이 동작해야 하기 때문이다.
 - **CLI 프로바이더:**
@@ -278,7 +281,7 @@ data class PromptContext(
   - ...
   ```
 - **`state.json`:** `{"companions": ["설월"], "location": "흑풍채 근처 숲", "time": "3일차 밤", "updatedAtTurn": 30}`
-- **예산(글자 수, 설정값):** 인물 `## 기억` 3000, 주인공 `## 변화 기록` 4000, 연대기 회차 원문 12000. 넘으면 파이프라인이 압축 단계를 추가로 실행한다.
+- **예산(글자 수, 설정값):** 인물 `## 기억` 3000, 주인공 `## 변화 기록` 4000, 연대기 회차 원문 12000. 키는 `crack.memory.budget.character|protagonist|chronicle`(T05에서 확정). 넘으면 파이프라인이 압축 단계를 추가로 실행한다.
 - **T05 제공 API:** `readSection`, `replaceSection`(없으면 끝에 추가), `parseAliases`, `Chronicle.append/split/compactOldest`, `StoryState` 읽기·쓰기, 예산 검사.
 
 ### 7.2 파이프라인 (T14)
