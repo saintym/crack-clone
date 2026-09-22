@@ -1,6 +1,6 @@
 # T18 프론트: `/` 자동완성, 지시 패널, 문서 편집
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 5
 - **의존**: T15, T16, T17
 - **브랜치**: `task/T18-frontend-commands`
@@ -35,3 +35,7 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23 시작
+- `task/T18-frontend-commands` 브랜치(worktree)에서 시작. 의존 작업 T15·T16·T17 머지 확인.
+- 병렬 작업 주의: T19(상태 패널, ChatPage 탭 등록), T21(`index.css`, 백엔드 버그 수정)이 동시에 진행 중이다. ChatPage는 탭 등록과 입력창 연결만, `index.css`와 백엔드는 건드리지 않는다.
