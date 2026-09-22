@@ -12,7 +12,9 @@ import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.nio.file.Files
 import java.nio.file.Path
-import java.nio.file.StandardCopyOption
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.LinkOption
+import java.nio.file.StandardOpenOption
 
 @Service
 @Transactional(readOnly = true)
@@ -67,6 +69,10 @@ class ScenarioService(
         scenarioRepository.delete(scenario)
     }
 
+    /**
+     * 시나리오 폴더의 기본 구조를 만든다. **이미 있는 파일은 건드리지 않는다**(BUG-006).
+     * 기존 시나리오 폴더를 DB에 등록할 때 원본 문서가 템플릿으로 덮어써지지 않게 하기 위해서다.
+     */
     private fun initScenarioDirectory(scenarioDir: Path) {
         Files.createDirectories(scenarioDir)
         Files.createDirectories(scenarioDir.resolve("characters"))
@@ -79,15 +85,30 @@ class ScenarioService(
         copyTemplate("protagonist.md", scenarioDir.resolve("characters/protagonist.md"))
         copyTemplate("must_remember.md", scenarioDir.resolve("memory/must_remember.md"))
 
-        Files.writeString(scenarioDir.resolve("chat/chat_latest.md"), "# 최근 대화\n\n")
+        writeIfAbsent(scenarioDir.resolve("chat/chat_latest.md"), "# 최근 대화\n\n")
     }
 
+    /** 템플릿을 [target]에 복사한다. [target]이 이미 있으면 아무것도 하지 않는다. */
     private fun copyTemplate(templateName: String, target: Path) {
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return
         val source = templateDir.resolve(templateName)
-        if (Files.exists(source)) {
-            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING)
-        } else {
-            Files.writeString(target, "# $templateName\n")
+        try {
+            if (Files.exists(source)) {
+                Files.copy(source, target)
+            } else {
+                Files.writeString(target, "# $templateName\n", StandardOpenOption.CREATE_NEW)
+            }
+        } catch (e: FileAlreadyExistsException) {
+            // 확인과 쓰기 사이에 생긴 파일도 덮어쓰지 않는다
+        }
+    }
+
+    private fun writeIfAbsent(target: Path, content: String) {
+        if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) return
+        try {
+            Files.writeString(target, content, StandardOpenOption.CREATE_NEW)
+        } catch (e: FileAlreadyExistsException) {
+            // 덮어쓰지 않는다
         }
     }
 }

@@ -97,6 +97,44 @@ class ScenarioServiceTest {
     }
 
     @Test
+    fun `이미 있는 시나리오 폴더를 등록하면 원본 문서를 덮어쓰지 않는다 (BUG-006)`() {
+        // given: DB에는 없고 폴더만 있는 시나리오
+        val scenarioDir = tempDir.resolve("기존시나리오")
+        Files.createDirectories(scenarioDir.resolve("characters"))
+        Files.createDirectories(scenarioDir.resolve("chat"))
+        Files.writeString(scenarioDir.resolve("world.md"), "원본 세계관")
+        Files.writeString(scenarioDir.resolve("scenario.md"), "원본 시나리오")
+        Files.writeString(scenarioDir.resolve("characters/protagonist.md"), "원본 주인공")
+        Files.writeString(scenarioDir.resolve("chat/chat_latest.md"), "## USER\n원본 대화\n")
+        whenever(scenarioRepository.existsByName("기존시나리오")).thenReturn(false)
+        whenever(scenarioRepository.save(any<Scenario>())).thenAnswer { it.getArgument<Scenario>(0) }
+
+        // when
+        scenarioService.create(ScenarioCreateRequest(name = "기존시나리오", title = "기존"))
+
+        // then: 있던 파일은 그대로, 없던 파일만 템플릿으로 채운다
+        assertEquals("원본 세계관", Files.readString(scenarioDir.resolve("world.md")))
+        assertEquals("원본 시나리오", Files.readString(scenarioDir.resolve("scenario.md")))
+        assertEquals("원본 주인공", Files.readString(scenarioDir.resolve("characters/protagonist.md")))
+        assertEquals("## USER\n원본 대화\n", Files.readString(scenarioDir.resolve("chat/chat_latest.md")))
+        assertEquals("# 필수 기억사항\n", Files.readString(scenarioDir.resolve("memory/must_remember.md")))
+    }
+
+    @Test
+    fun `템플릿이 없어도 기존 파일을 한 줄짜리로 덮어쓰지 않는다 (BUG-006)`() {
+        Files.delete(tempDir.resolve("_templates/world.md"))
+        val scenarioDir = tempDir.resolve("템플릿없음")
+        Files.createDirectories(scenarioDir)
+        Files.writeString(scenarioDir.resolve("world.md"), "원본 세계관")
+        whenever(scenarioRepository.existsByName("템플릿없음")).thenReturn(false)
+        whenever(scenarioRepository.save(any<Scenario>())).thenAnswer { it.getArgument<Scenario>(0) }
+
+        scenarioService.create(ScenarioCreateRequest(name = "템플릿없음", title = "x"))
+
+        assertEquals("원본 세계관", Files.readString(scenarioDir.resolve("world.md")))
+    }
+
+    @Test
     fun `중복된 시나리오 이름으로 생성하면 예외가 발생한다`() {
         // given
         whenever(scenarioRepository.existsByName("중복")).thenReturn(true)
