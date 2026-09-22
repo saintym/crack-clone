@@ -10,6 +10,11 @@ import java.time.LocalDateTime
 
 interface StoryMessageRepository : JpaRepository<StoryMessage, Long> {
 
+    @Query("SELECT m.storyId FROM StoryMessage m WHERE m.id = :id")
+    fun findStoryIdById(@Param("id") id: Long): Long?
+
+    fun findByIdAndStoryId(id: Long, storyId: Long): StoryMessage?
+
     fun findByStoryIdOrderBySeqAsc(storyId: Long): List<StoryMessage>
 
     fun findFirstByStoryIdOrderBySeqDesc(storyId: Long): StoryMessage?
