@@ -1,6 +1,6 @@
 # T11 프론트 채팅을 새 API로 연동
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 3
 - **의존**: T04, T07, T10
 - **브랜치**: `task/T11-frontend-chat`
@@ -50,3 +50,6 @@
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 작업 시작. 브랜치 `task/T11-frontend-chat`(worktree).
