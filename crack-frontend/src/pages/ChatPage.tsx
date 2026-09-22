@@ -1,6 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { storyApi } from '../api/stories';
+import { errorMessage } from '../api/chat';
 import { useStoryContext } from '../hooks/useStoryContext';
 import { useProviders } from '../hooks/useProviders';
 import { useMessages } from '../hooks/useMessages';
@@ -33,7 +34,7 @@ export default function ChatPage() {
     });
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [branching, setBranching] = useState<{ seq: number; title: string } | null>(null);
+  const [branching, setBranching] = useState<{ messageId: number; title: string; error?: string } | null>(null);
 
   // 오른쪽 패널 탭. T15(기억), T18(지시), T19(상태)가 여기에 추가한다. 비어 있으면 여는 버튼을 숨긴다.
   const panelTabs: SidePanelTab[] = [];
@@ -46,12 +47,13 @@ export default function ChatPage() {
   const handleBranch = useCallback(async (title: string) => {
     if (branching === null || !title.trim() || !storyId) return;
     try {
-      const { data: newStory } = await storyApi.branch(storyId, branching.seq, title.trim());
+      const { data: newStory } = await storyApi.branch(storyId, branching.messageId, title.trim());
       setBranching(null);
       refreshStories();
       navigate(`/chat/${newStory.id}`);
     } catch (err) {
       console.error('Branch error:', err);
+      setBranching({ ...branching, title, error: errorMessage(err, '분기하지 못했습니다') });
     }
   }, [branching, storyId, refreshStories, navigate]);
 
@@ -84,7 +86,7 @@ export default function ChatPage() {
           onSelectVariant={(msg, index) => chat.selectVariant(msg.id, index)}
           onRegenerate={(msg, instruction) => { regenerate(msg, instruction); }}
           onContinue={() => { continueStory(); }}
-          onBranch={(msg) => setBranching({ seq: msg.seq, title: `${story?.title || '스토리'} - 분기` })}
+          onBranch={(msg) => setBranching({ messageId: msg.id, title: `${story?.title || '스토리'} - 분기` })}
           onEditSave={(msg, content) => chat.editMessage(msg.id, content)}
           onDelete={(msg) => chat.deleteFrom(msg.id)}
         />
@@ -105,6 +107,7 @@ export default function ChatPage() {
       {branching !== null && (
         <BranchDialog
           initialTitle={branching.title}
+          error={branching.error}
           onCancel={() => setBranching(null)}
           onConfirm={handleBranch}
         />

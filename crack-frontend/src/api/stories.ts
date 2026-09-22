@@ -33,6 +33,7 @@ export const storyApi = {
   delete: (scenarioId: number, storyId: number) =>
     api.delete(`/scenarios/${scenarioId}/stories/${storyId}`),
 
-  branch: (storyId: number, messageIndex: number, title: string) =>
-    api.post<Story>(`/stories/${storyId}/branch`, { messageIndex, title }),
+  /** 이 메시지까지를 복사해 새 스토리를 만든다 (T09: `{messageId, title}`) */
+  branch: (storyId: number, messageId: number, title: string) =>
+    api.post<Story>(`/stories/${storyId}/branch`, { messageId, title }),
 };
