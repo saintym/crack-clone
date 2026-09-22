@@ -57,7 +57,7 @@ class ChatFlowService(
         return StoryMessagesState(
             story = StoryChatInfo(
                 turnCount = story.turnCount,
-                recordedThroughTurn = 0, // stories.recorded_through_turn은 T14(V7)가 추가한다
+                recordedThroughTurn = story.recordedThroughTurn,
                 generating = generationLock.isLocked(storyId),
             ),
             messages = messages,
@@ -267,7 +267,7 @@ data class StoryMessagesState(
 
 data class StoryChatInfo(
     val turnCount: Int,
-    /** T14 전까지 항상 0 */
+    /** 기억 기록이 반영된 마지막 턴 (`stories.recorded_through_turn`) */
     val recordedThroughTurn: Int,
     val generating: Boolean,
 )

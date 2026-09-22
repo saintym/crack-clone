@@ -27,7 +27,8 @@ import java.nio.file.Path
  * 2. 원본 메시지 중 기준 메시지의 seq까지를 후보(variants)와 함께 복사한다. seq·턴·종류·수정 시각은 그대로 둔다.
  * 3. `turn_count` = 복사한 메시지의 최대 턴.
  *
- * `recorded_through_turn`은 T14가 아직 없어 다루지 않는다(새 스토리는 기본값 0). T14가 머지되면 `min(원본값, 분기 턴)`으로 둔다.
+ * 4. `recorded_through_turn` = `min(원본값, 기준 메시지의 턴)` (T14). 기억 문서는 폴더째 복사되지만 `memory/history`와
+ *    `memory_records`는 복사하지 않으므로, 분기 스토리에서는 분기 전 기록을 되돌릴 수 없다.
  *
  * 원본은 읽기만 한다. 폴더 복사나 DB 저장이 실패하면 만든 폴더를 지운다(DB는 트랜잭션 롤백).
  */
@@ -83,6 +84,7 @@ class StoryBranchService(
                     title = title,
                     dirName = dirName,
                     turnCount = copied.maxOfOrNull { it.turnNo } ?: 0,
+                    recordedThroughTurn = minOf(source.story.recordedThroughTurn, pivot.turnNo),
                 )
             )
             copyMessages(copied, story.id)
