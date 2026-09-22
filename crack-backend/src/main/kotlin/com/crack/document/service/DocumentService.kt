@@ -13,6 +13,10 @@ import java.nio.file.StandardCopyOption
 class DocumentService(
     private val dataPaths: DataPaths
 ) {
+    private companion object {
+        const val CHARACTERS_DIR = "characters"
+    }
+
     /** 시나리오 원본 문서 타입 (DESIGN.md §2, §9). 선택 문서(prologue, keywords, commands, images)는 없을 수 있다. */
     enum class DocumentType(val fileName: String) {
         WORLD("world.md"),
@@ -138,8 +142,21 @@ class DocumentService(
     private fun resolveDocumentPath(scenarioName: String, fileName: String): Path =
         scenarioDir(scenarioName).resolve(fileName)
 
+    /**
+     * 인물 문서 경로. [charName]은 `characters/` 안의 파일 이름 하나(경로 조각 하나)만 허용한다.
+     * `../world` 같은 이름으로 `characters/` 밖을 읽고 쓰지 못하게 한다(T12, `DataPaths`와 같은 규칙).
+     */
     private fun characterPath(scenarioName: String, charName: String): Path =
-        scenarioDir(scenarioName).resolve("characters/$charName.md")
+        scenarioDir(scenarioName).resolve(CHARACTERS_DIR).resolve("${requireCharacterName(charName)}.md")
+
+    private fun requireCharacterName(charName: String): String {
+        if (charName.isBlank() || charName == "." || charName == ".." ||
+            charName.contains('/') || charName.contains('\\') || charName.contains('\u0000')
+        ) {
+            throw BadRequestException("캐릭터 이름이 올바르지 않습니다: '$charName'")
+        }
+        return charName
+    }
 
     private fun ensureScenarioExists(scenarioName: String) {
         if (!Files.exists(scenarioDir(scenarioName))) {

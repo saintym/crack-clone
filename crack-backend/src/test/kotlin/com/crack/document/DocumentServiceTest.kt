@@ -200,4 +200,28 @@ class DocumentServiceTest {
             documentService.deleteCharacter("테스트", "없는캐릭터")
         }
     }
+
+    // --- 인물 이름 검증 (T12) ---
+
+    @Test
+    fun `경로 조각이 아닌 캐릭터 이름은 거부하고 characters 밖을 건드리지 않는다`() {
+        val bad = listOf("../world", "..", ".", "", " ", "a/b", "a\\b", "sub/../../world", "x\u0000y")
+        for (name in bad) {
+            assertThrows<BadRequestException>("읽기: '$name'") { documentService.readCharacter("테스트", name) }
+            assertThrows<BadRequestException>("생성: '$name'") { documentService.createCharacter("테스트", name, "침범") }
+            assertThrows<BadRequestException>("수정: '$name'") { documentService.updateCharacter("테스트", name, "침범") }
+            assertThrows<BadRequestException>("삭제: '$name'") { documentService.deleteCharacter("테스트", name) }
+        }
+
+        assertEquals("# 세계관\n\n현대 서울", Files.readString(tempDir.resolve("테스트/world.md")))
+        assertFalse(Files.exists(tempDir.resolve("테스트/.md")))
+    }
+
+    @Test
+    fun `점이나 공백이 들어간 평범한 이름은 허용한다`() {
+        documentService.createCharacter("테스트", "설 월.v2", "내용")
+
+        assertEquals("내용", documentService.readCharacter("테스트", "설 월.v2").content)
+        assertTrue(Files.exists(tempDir.resolve("테스트/characters/설 월.v2.md")))
+    }
 }
