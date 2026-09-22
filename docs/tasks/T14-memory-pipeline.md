@@ -35,7 +35,8 @@
    - `GET /memory/records`
    - `GET /memory/records/{id}`: 변경 파일별 before와 현재 내용. diff는 프론트가 계산한다
    - 메시지 목록 응답(`GET /messages`)의 `story`에 `memory: {status, lastRecordId, unseen}`을 추가한다. T07 DTO에 필드만 추가한다
-9. **Fake 응답:** 기록용 fake 응답을 등록해 리모트에서도 파이프라인 전체를 돌릴 수 있게 한다.
+9. **분기 연동(T09 메모):** 분기로 만든 스토리의 `recorded_through_turn`은 `min(원본값, 분기 기준 턴)`으로 설정한다(`StoryBranchService`). 기억 문서는 폴더째 복사되지만 `memory/history`는 복사되지 않으므로, 분기 스토리에서는 분기 전 기록을 되돌릴 수 없다.
+10. **Fake 응답:** 기록용 fake 응답을 등록해 리모트에서도 파이프라인 전체를 돌릴 수 있게 한다.
 
 ## 완료 조건
 - [ ] `./gradlew test` 통과. Fake 프로바이더로 통합 테스트

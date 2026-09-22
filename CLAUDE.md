@@ -28,6 +28,12 @@ cd crack-frontend && npm ci && npm run build && npm run lint
 ```
 
 > **기준선:** 백엔드 테스트 전부 통과. 프론트 build 통과. lint 오류 0 (T00·T04로 복구).
+> **백엔드 주의:**
+> - KDoc/주석에 `/*` 문자열(예: `characters/*.md`, `/chat/*`)을 쓰면 Kotlin이 중첩 주석으로 읽어 컴파일이 깨진다.
+> - MockMvc 테스트는 로컬 설정에 따라 AuthFilter가 끼므로 `@AutoConfigureMockMvc(addFilters = false)` 또는 `crack.auth.password=`로 고정한다.
+> - SSE 테스트는 `asyncDispatch(result)`까지 실행해 요청을 끝낸다(안 하면 DB 커넥션 풀 고갈).
+> - Mockito로 Kotlin 기본 인자 함수를 스텁할 때는 매처 개수를 맞춘다(`chat(any(), anyOrNull())`).
+> - 설정 파일을 잠시 치울 때는 작업 공간 밖이 아니라 스크래치 경로에 둔다.
 > **프론트 주의:** `.npmrc`(legacy-peer-deps)가 있어야 `npm ci`가 된다. React Hooks lint(v7)는 effect 안에서 부르는 async 함수의 `await` 뒤 setState도 오류로 본다. 로드 함수는 `.then` 체인이나 effect 안의 IIFE로 작성한다(T00 작업 로그 참고).
 
 ## 리모트 환경의 제약과 대응
