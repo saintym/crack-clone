@@ -31,6 +31,7 @@ import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.MvcResult
 import org.springframework.test.web.servlet.RequestBuilder
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch
@@ -101,9 +102,16 @@ class StoryMessageApiTest {
     private fun start(builder: RequestBuilder): MvcResult =
         mockMvc.perform(builder).andExpect(request().asyncStarted()).andReturn()
 
+    /**
+     * SSE가 끝날 때까지 기다린 뒤 async dispatch까지 마친다. 실제 서블릿 컨테이너처럼 요청 수명을 끝내야
+     * OSIV(테스트 프로필에서는 `open-in-view` 기본값 true)가 잡은 DB 커넥션이 풀로 돌아간다.
+     * 생략하면 SSE 요청마다 커넥션이 새어 10개쯤 뒤에 풀이 바닥난다.
+     */
     private fun finish(result: MvcResult): List<SseEvent> {
         result.getAsyncResult(10_000)
-        return parseSse(result.response.getContentAsString(Charsets.UTF_8))
+        val body = result.response.getContentAsString(Charsets.UTF_8)
+        mockMvc.perform(asyncDispatch(result))
+        return parseSse(body)
     }
 
     private fun sse(builder: RequestBuilder): List<SseEvent> = finish(start(builder))
@@ -307,6 +315,20 @@ class StoryMessageApiTest {
         mockMvc.perform(regenReq()).andExpect(status().isBadRequest)
         messageService.appendAssistant(storyId, "프롤로그", kind = MessageKind.PROLOGUE)
         mockMvc.perform(regenReq()).andExpect(status().isBadRequest)
+    }
+
+    @Test
+    fun `프롤로그만 있는 스토리에서 프롤로그 ID로 재생성해도 400이고 수정은 된다`() {
+        val prologue = messageService.appendAssistant(storyId, "프롤로그", kind = MessageKind.PROLOGUE)
+
+        mockMvc.perform(regenReq(mapOf("messageId" to prologue.id))).andExpect(status().isBadRequest)
+        assertThat(variantRepository.findByMessageIdOrderByVariantIndexAsc(prologue.id)).hasSize(1)
+        assertThat(requests).isEmpty()
+
+        mockMvc.perform(
+            patch("${base()}/${prologue.id}").contentType(MediaType.APPLICATION_JSON).content(json(mapOf("content" to "고친 프롤로그")))
+        ).andExpect(status().isOk).andExpect(jsonPath("$.content").value("고친 프롤로그"))
+        assertThat(messageRepository.findById(prologue.id).get().content).isEqualTo("고친 프롤로그")
     }
 
     @Test
