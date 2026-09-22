@@ -171,6 +171,20 @@ class StoryBranchTest {
     }
 
     @Test
+    fun `분기 스토리의 recorded_through_turn은 원본값과 기준 턴 중 작은 값이다`() {
+        storyRepository.save(storyRepository.findById(source.id).get().apply { recordedThroughTurn = 3 })
+        branch("/api/stories/${source.id}/branch", mapOf("messageId" to ids[3], "title" to "기준 턴이 작음"))
+            .andExpect(status().isCreated)
+        assertEquals(2, branchedStory().recordedThroughTurn)
+        storyRepository.delete(branchedStory())
+
+        storyRepository.save(storyRepository.findById(source.id).get().apply { recordedThroughTurn = 1 })
+        branch("/api/stories/${source.id}/branch", mapOf("messageId" to ids[5], "title" to "원본값이 작음"))
+            .andExpect(status().isCreated)
+        assertEquals(1, branchedStory().recordedThroughTurn)
+    }
+
+    @Test
     fun `과도기 messageIndex는 seq로 해석한다`() {
         branch("/api/scenarios/${scenario.id}/stories/${source.id}/branch", mapOf("messageIndex" to 1, "title" to "옛 형식"))
             .andExpect(status().isCreated)

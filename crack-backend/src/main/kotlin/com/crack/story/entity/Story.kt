@@ -31,7 +31,11 @@ class Story(
     val createdAt: LocalDateTime = LocalDateTime.now(),
 
     @Column(name = "updated_at")
-    var updatedAt: LocalDateTime = LocalDateTime.now()
+    var updatedAt: LocalDateTime = LocalDateTime.now(),
+
+    /** 기억 기록이 반영된 마지막 턴 (V7, T14). 이 턴까지는 기억 문서에 들어 있다. 0이면 아직 기록 없음. */
+    @Column(name = "recorded_through_turn", nullable = false)
+    var recordedThroughTurn: Int = 0,
 )
 
 enum class StoryStatus {

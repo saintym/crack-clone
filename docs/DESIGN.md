@@ -101,9 +101,11 @@ CREATE TABLE memory_records (
     changed_files TEXT,                   -- JSON 배열: 스토리 폴더 기준 상대 경로
     rerecorded_turns TEXT,                -- JSON 배열: 이번에 재반영한 수정된 과거 턴
     error         TEXT,
-    created_at    TIMESTAMP DEFAULT NOW(),
+    seen          BOOLEAN NOT NULL DEFAULT FALSE,  -- 뱃지 읽음 표시 (T14에서 추가)
+    created_at    TIMESTAMP DEFAULT NOW(),        -- 트리거 시각 = 범위를 고정한 시각
     finished_at   TIMESTAMP
 );
+CREATE INDEX idx_memory_records_story ON memory_records(story_id, id);
 ALTER TABLE stories ADD COLUMN recorded_through_turn INT NOT NULL DEFAULT 0;
 ```
 
@@ -112,7 +114,8 @@ ALTER TABLE stories ADD COLUMN recorded_through_turn INT NOT NULL DEFAULT 0;
 - **이어쓰기(CONTINUATION)** 는 유저 메시지 없이 AI 메시지만으로 새 턴을 연다.
 - **프롤로그**는 `turn_no = 0`, `seq = 0`, `kind = PROLOGUE`, `role = ASSISTANT`다. 턴 수와 기억 기록 대상에서 빠진다.
 - `stories.turn_count` = 남아 있는 메시지의 최대 `turn_no`. 추가하거나 잘라낼 때마다 다시 계산한다.
-- 과거 메시지를 수정하면 `edited_at`을 기록한다. 기록 파이프라인은 `turn_no <= recorded_through_turn AND edited_at > 마지막 DONE 기록의 finished_at`인 턴을 재반영 대상으로 잡는다 (D3).
+- 과거 메시지를 수정하면 `edited_at`을 기록한다. 기록 파이프라인은 `turn_no <= recorded_through_turn AND edited_at > 마지막 DONE 기록의 created_at`인 턴을 재반영 대상으로 잡는다 (D3).
+  - 기준은 `finished_at`이 아니라 `created_at`(범위를 고정한 시각)이다(T14). 기록이 도는 동안 고친 턴은 이번 기록이 원문을 읽은 뒤일 수 있으므로, 다음 기록에서 다시 읽어야 한다. 조금 일찍 기준을 잡아 한 번 더 읽는 쪽이 놓치는 쪽보다 낫다.
 
 ## 4. AI 계층 (T01)
 
@@ -188,7 +191,7 @@ class MessageService {
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | `/messages` | `{ story: {turnCount, recordedThroughTurn, generating}, messages: MessageView[] }` |
+| GET | `/messages` | `{ story: {turnCount, recordedThroughTurn, generating, memory}, messages: MessageView[] }`. `memory`는 T14가 추가(§7.2 조회) |
 | POST | `/messages` (SSE) | body `{content, provider?, command?}`. 유저 메시지를 저장한 뒤 응답을 생성한다 |
 | POST | `/messages/continue` (SSE) | body `{provider?}`. 가상 지시로 이어쓰기하며, 지시문은 저장하지 않는다 |
 | POST | `/messages/regenerate` (SSE) | body `{provider?, instruction?, messageId?}`. 마지막 ASSISTANT에 후보를 추가한다. 마지막이 USER면 첫 응답을 생성한다. `messageId`를 주면 대화의 마지막 메시지여야 한다(아니면 400). 프롤로그는 400 |
@@ -333,7 +336,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 trigger(storyId, reason)
   · 싱글 플라이트: 스토리당 RUNNING은 1개. 실행 중이면 무시
   · 범위 고정: from = recorded_through + 1, to = turnCount (둘 다 트리거 시점 값)
-  · 재반영: editedTurnsSince(recorded_through, 마지막 DONE.finished_at)
+  · 재반영: editedTurnsSince(recorded_through, 마지막 DONE.created_at)  (§3 턴 규칙)
   · to < from 이고 재반영할 턴도 없으면 아무것도 하지 않는다
 
 ① 시나리오 관리자 (RECORD, 1회)
@@ -349,19 +352,53 @@ trigger(storyId, reason)
    · 어느 단계든 실패하면 파일을 하나도 쓰지 않고 FAILED (1회 재시도 후)
 ```
 
-- **트리거:** `AfterTurnHook`에서 `turnCount - recorded_through >= 10`이면 비동기 실행(AUTO). `POST /api/stories/{id}/memory/record`는 MANUAL이며 `/기록` 명령이 이것을 호출한다.
-- **되돌리기:** `POST /memory/records/{id}/revert`. **가장 최근 DONE만** 되돌릴 수 있다(스택). before 스냅샷을 복원하고 `recorded_through = from - 1`, 상태는 REVERTED.
-- **삭제 연동:** `TruncateHook`에서 잘린 최소 턴이 `recorded_through` 이하이면, `recorded_through < 잘린 턴`이 될 때까지 최근 기록부터 차례로 되돌린다.
-- **조회:** `GET /memory/records`(목록과 상태), `GET /memory/records/{id}`(변경 파일, before 대비 현재 diff).
+- **트리거:** `AfterTurnHook`에서 `turnCount - recorded_through >= crack.memory.record.every-turns`(기본 10)이면 비동기 실행(AUTO). 재생성(`mode = REGENERATE`)은 턴을 늘리지 않으므로 트리거하지 않는다. `POST /api/stories/{id}/memory/record`는 MANUAL이며 `/기록` 명령이 이것을 호출한다.
+- **범위의 끝:** 마지막 메시지가 응답 없는 USER면(생성 중이거나 전송 실패) 그 턴은 범위에서 뺀다(`to = 그 턴 - 1`).
+- **재반영만 있는 기록:** 새 턴이 없고 재반영할 턴만 있으면 `from = recorded_through + 1`, `to = recorded_through`(빈 범위)로 저장한다. 그래서 되돌리기 규칙(`recorded_through = from - 1`)이 그대로 맞는다.
+- **반영 직전 검사:** 스토리 행을 잠근 뒤 ① 기록이 아직 RUNNING인지(삭제 연동으로 취소되지 않았는지) ② 읽었던 문서가 그사이 바뀌지 않았는지(문서 API로 사용자가 고쳤는지) 확인한다. ②가 어긋나면 그 시도는 실패로 보고 처음부터 다시 한다(재시도 1회).
+- **되돌리기:** `POST /memory/records/{id}/revert`. **가장 최근 DONE만** 되돌릴 수 있다(스택, 아니면 400). 기록이 RUNNING이면 409. before 스냅샷을 복원하고(스냅샷이 없던 파일 = 기록 전에 없던 파일은 지운다) `recorded_through = from - 1`, 상태는 REVERTED. 스냅샷 폴더는 조회용으로 남긴다.
+- **삭제 연동:** `TruncateHook`에서 잘린 최소 턴이 `recorded_through` 이하이면, `recorded_through < 잘린 턴`이 될 때까지 최근 DONE부터 차례로 되돌린다. 되돌릴 DONE이 없는데도(분기 스토리 등) `recorded_through >= 잘린 턴`이면 파일은 두고 `recorded_through = 잘린 턴 - 1`로만 내린다. RUNNING 기록의 범위(`to`)가 잘린 턴 이상이면 그 기록은 FAILED(취소)로 바꾸고, 결과를 쓰지 않는다.
+- **서버 재시작:** 기동 시 남아 있는 RUNNING은 FAILED로 바꾼다.
+- **분기(T09 연동):** 새 스토리의 `recorded_through_turn = min(원본값, 분기 기준 메시지의 턴)`. `memory_records`와 `memory/history`는 복사하지 않으므로 분기 전 기록은 되돌릴 수 없다.
+
+**API** (모두 `/api/stories/{storyId}` 아래)
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/memory/record` | 수동 기록. 응답 `{result, record}`. `result` = `STARTED` \| `ALREADY_RUNNING` \| `NOTHING_TO_RECORD`. `record`는 시작했거나 실행 중인 `MemoryRecordSummary`(없으면 null) |
+| GET | `/memory/records` | `MemoryRecordSummary[]` (최근 것부터) |
+| GET | `/memory/records/{id}` | `MemoryRecordSummary` + `files: [{path, before, current}]`. `before`는 스냅샷(기록 전에 없던 파일이면 null), `current`는 지금 내용(없으면 null). diff는 프론트가 계산한다 |
+| POST | `/memory/records/{id}/revert` | 되돌리기. 응답 `MemoryRecordSummary`. 최근 DONE이 아니면 400, 실행 중이면 409 |
+| POST | `/memory/records/seen` | 뱃지 읽음 처리(이 스토리 기록 전부 `seen = true`). 204 |
+
+`MemoryRecordSummary = {id, fromTurn, toTurn, reason, status, changedFiles: string[], rerecordedTurns: int[], error, createdAt, finishedAt, revertable}`. `revertable`은 가장 최근 DONE이고 실행 중인 기록이 없을 때 true.
+
+**`GET /messages`의 `story.memory`:** `{status, lastRecordId, unseen}`
+- `status`: 가장 최근 기록의 상태(`RUNNING` | `DONE` | `FAILED` | `REVERTED`). 기록이 없으면 `NONE`
+- `lastRecordId`: 가장 최근 기록 ID(없으면 null)
+- `unseen`: 읽음 처리되지 않은 DONE 또는 FAILED 기록이 있으면 true
+
+**설정 키** (`crack.memory.record.*`): `every-turns`(10), `concurrency`(3, 캐릭터 관리자 동시 실행 수), `max-attempts`(2 = 최초 1회 + 재시도 1회), `chronicle-context-entries`(2, 시나리오 관리자에 넣는 최근 회차 수), `auto-enabled`(true, 10턴 자동 트리거).
 
 ### 7.3 LLM 출력 형식
-각 관리자는 XML 태그 블록으로 답한다. 파서는 태그가 없거나 비어 있으면 실패로 처리한다.
+각 관리자는 XML 태그 블록으로 답한다. 파서는 태그가 없거나 비어 있으면 실패로 처리한다. 태그 밖의 글은 무시한다. 본문이 코드 펜스로 감싸여 있으면 벗긴다.
 
 ```
 <chronicle>…마크다운…</chronicle>
 <state>{"companions":[…],"location":"…","time":"…"}</state>
 <involved>설월, 무극</involved>
 ```
+
+| 단계 | 필수 태그 | 비어 있어도 되는 태그 (`없음` 또는 빈 값) | 선택 태그 |
+|---|---|---|---|
+| ① 시나리오 관리자 | `<chronicle>`(새 턴이 없는 재반영 기록이면 `없음` 허용), `<state>` | `<involved>` | `<revised entry="N">`: 재반영 턴이 든 기존 회차 N의 본문 전체를 고친 것. 여러 개 가능 |
+| ② 캐릭터 관리자 | `<memory>`(새 `## 기억` 본문 전체, 제목 줄 없이) | `<protagonist_changes>` | |
+| ③ 주인공 반영 | `<changes>`(새 `## 변화 기록` 본문 전체, 제목 줄 없이) | | |
+| ④ 압축 | `<compressed>`(압축한 섹션 본문 전체, 또는 새 장 요약 전체) | | |
+
+- `<memory>`와 `<changes>` 맨 앞에 `## 기억`/`## 변화 기록` 제목 줄이 붙어 오면 파서가 뗀다.
+- `<involved>`의 이름은 인물 파일명 또는 `별칭`과 정확히 같아야 한다. 모르는 이름과 주인공은 무시한다.
+- 관리자 프롬프트 원문은 `memory/record/RecordPrompts.kt`에 있다.
 
 ### 7.4 기록 기준 (관리자 프롬프트에 그대로 넣는다)
 - **기록한다:** 관계에 영향을 준 큰 사건, 감정·태도의 뚜렷한 변화, **영구적인** 소지품·기술·신체 변화
