@@ -50,7 +50,7 @@ class StoryController(
         @PathVariable scenarioId: Long,
         @PathVariable storyId: Long,
         @RequestBody request: StoryBranchRequest
-    ): StoryResponse = storyBranchService.branch(storyId, request.messageId, request.messageIndex, request.title)
+    ): StoryResponse = storyBranchService.branch(storyId, request.messageId, request.title)
 }
 
 @RestController
@@ -68,5 +68,5 @@ class StoryDirectController(
     fun branch(
         @PathVariable storyId: Long,
         @RequestBody request: StoryBranchRequest
-    ): StoryResponse = storyBranchService.branch(storyId, request.messageId, request.messageIndex, request.title)
+    ): StoryResponse = storyBranchService.branch(storyId, request.messageId, request.title)
 }

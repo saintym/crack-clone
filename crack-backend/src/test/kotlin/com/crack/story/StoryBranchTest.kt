@@ -171,8 +171,8 @@ class StoryBranchTest {
     }
 
     @Test
-    fun `과도기 messageIndex는 seq로 해석한다`() {
-        branch("/api/scenarios/${scenario.id}/stories/${source.id}/branch", mapOf("messageIndex" to 1, "title" to "옛 형식"))
+    fun `시나리오 경로로도 분기한다`() {
+        branch("/api/scenarios/${scenario.id}/stories/${source.id}/branch", mapOf("messageId" to ids[1], "title" to "시나리오 경로"))
             .andExpect(status().isCreated)
 
         val branched = branchedStory()
@@ -183,10 +183,10 @@ class StoryBranchTest {
     @Test
     fun `잘못된 요청은 거부하고 스토리를 만들지 않는다`() {
         val url = "/api/stories/${source.id}/branch"
-        branch(url, mapOf("messageId" to ids[1], "messageIndex" to 1, "title" to "둘 다")).andExpect(status().isBadRequest)
         branch(url, mapOf("title" to "기준 없음")).andExpect(status().isBadRequest)
         branch(url, mapOf("messageId" to ids[1], "title" to " ")).andExpect(status().isBadRequest)
-        branch(url, mapOf("messageIndex" to 99, "title" to "없는 위치")).andExpect(status().isBadRequest)
+        // 옛 과도기 필드만 보내면 기준 메시지가 없는 것으로 본다
+        branch(url, mapOf("messageIndex" to 1, "title" to "옛 형식")).andExpect(status().isBadRequest)
 
         // 다른 스토리의 메시지
         val otherDir = scenarioDir.resolve("stories/1700000000001")
@@ -202,12 +202,12 @@ class StoryBranchTest {
     @Test
     fun `이전되지 않은 옛 스토리는 분기할 수 없다`() {
         val legacy = storyRepository.save(Story(scenarioId = scenario.id, title = "옛", dirName = DataPaths.LEGACY_DIR_NAME))
-        branch("/api/stories/${legacy.id}/branch", mapOf("messageIndex" to 0, "title" to "x")).andExpect(status().isBadRequest)
+        branch("/api/stories/${legacy.id}/branch", mapOf("messageId" to ids[0], "title" to "x")).andExpect(status().isBadRequest)
 
         val oldDir = scenarioDir.resolve("stories/1600000000000")
         write(oldDir.resolve("chat/chat_latest.md"), "# 최근 대화\n")
         val old = storyRepository.save(Story(scenarioId = scenario.id, title = "옛2", dirName = "1600000000000"))
-        branch("/api/stories/${old.id}/branch", mapOf("messageIndex" to 0, "title" to "x")).andExpect(status().isBadRequest)
+        branch("/api/stories/${old.id}/branch", mapOf("messageId" to ids[0], "title" to "x")).andExpect(status().isBadRequest)
 
         assertTrue(storyRepository.findByScenarioIdOrderByUpdatedAtDesc(scenario.id).none { it.title == "x" })
     }
