@@ -399,7 +399,16 @@ trigger(storyId, reason)
   위에 있는 항목이 우선한다.
 - **매칭:** `KeywordMatcher`(T06)가 `recentText`에서 찾는다.
 - **동시 발동 수:** 설정값 `crack.prompt.keyword-max-active`(기본 3)
-- **주입 위치:** KEYWORDS 슬롯
+- **주입 위치:** KEYWORDS 슬롯. 기여자 `prompt.keyword.KeywordBookContributor`(order 0, name `keyword_book`), 선택은 `prompt.keyword.KeywordBook`(T17).
+  ```
+  === 키워드 설정 ===
+  ### {제목}
+  {내용}
+
+  ### {제목}
+  …
+  ```
+  발동한 항목이 없거나 파일이 없으면 섹션을 생략한다. 파싱 결과는 파일 경로별로 수정 시각과 크기가 같으면 재사용한다.
 
 ### 8.4 KeywordMatcher (T06)
 ```kotlin
