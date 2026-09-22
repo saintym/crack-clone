@@ -60,7 +60,7 @@ export function CharacterCard({ character }: { character: CharacterStatus }) {
             const turn = eventTurnLabel(e);
             return (
               <li key={i}>
-                {turn && <span className="mr-1.5 text-[11px] text-text-muted tabular-nums">{turn}</span>}
+                {turn && <span className="text-[11px] text-text-muted tabular-nums">{turn}</span>}{turn && ' '}
                 {e.description}
               </li>
             );
@@ -101,7 +101,7 @@ function RelationSection({ relations }: { relations: StatusRelation[] }) {
     <Section title="관계">
       {relations.map((r, i) => (
         <li key={i} className="whitespace-pre-line">
-          {r.target && <span className="mr-1 font-medium text-text-primary">{r.target}:</span>}
+          {r.target && <span className="font-medium text-text-primary">{r.target}:</span>}{r.target && ' '}
           {r.description}
         </li>
       ))}
