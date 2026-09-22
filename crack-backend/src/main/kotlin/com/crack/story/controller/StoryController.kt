@@ -1,7 +1,9 @@
 package com.crack.story.controller
 
+import com.crack.story.dto.StoryBranchRequest
 import com.crack.story.dto.StoryCreateRequest
 import com.crack.story.dto.StoryResponse
+import com.crack.story.service.StoryBranchService
 import com.crack.story.service.StoryService
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
@@ -9,7 +11,8 @@ import org.springframework.web.bind.annotation.*
 @RestController
 @RequestMapping("/api/scenarios/{scenarioId}/stories")
 class StoryController(
-    private val storyService: StoryService
+    private val storyService: StoryService,
+    private val storyBranchService: StoryBranchService
 ) {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -46,18 +49,15 @@ class StoryController(
     fun branch(
         @PathVariable scenarioId: Long,
         @PathVariable storyId: Long,
-        @RequestBody body: Map<String, Any>
-    ): StoryResponse {
-        val messageIndex = (body["messageIndex"] as Number).toInt()
-        val title = body["title"] as String
-        return storyService.branch(storyId, messageIndex, title)
-    }
+        @RequestBody request: StoryBranchRequest
+    ): StoryResponse = storyBranchService.branch(storyId, request.messageId, request.messageIndex, request.title)
 }
 
 @RestController
 @RequestMapping("/api/stories")
 class StoryDirectController(
-    private val storyService: StoryService
+    private val storyService: StoryService,
+    private val storyBranchService: StoryBranchService
 ) {
     @GetMapping("/{storyId}")
     fun getById(@PathVariable storyId: Long): StoryResponse =
@@ -67,10 +67,6 @@ class StoryDirectController(
     @ResponseStatus(HttpStatus.CREATED)
     fun branch(
         @PathVariable storyId: Long,
-        @RequestBody body: Map<String, Any>
-    ): StoryResponse {
-        val messageIndex = (body["messageIndex"] as Number).toInt()
-        val title = body["title"] as String
-        return storyService.branch(storyId, messageIndex, title)
-    }
+        @RequestBody request: StoryBranchRequest
+    ): StoryResponse = storyBranchService.branch(storyId, request.messageId, request.messageIndex, request.title)
 }
