@@ -18,7 +18,8 @@ import { useMemoryStatus } from '../components/panels/memory/useMemoryStatus';
 import { memoryPanelTab } from '../components/panels/memory/memoryPanelTab';
 import MemoryBadge from '../components/panels/memory/MemoryBadge';
 import { useDirectives } from '../components/panels/directives/useDirectives';
-import { directivesPanelTab } from '../components/panels/directives/directivesPanelTab';
+import { directivesPanelTab, DIRECTIVES_TAB_ID } from '../components/panels/directives/directivesPanelTab';
+import type { SystemCommandResult } from '../api/commands';
 import type { SidePanelTab } from '../types/panel';
 
 /** 채팅 화면. 상태는 훅에, 화면 조각은 components/chat에 두고 여기서는 조립만 한다. */
@@ -52,6 +53,12 @@ export default function ChatPage() {
   const panelTabs: SidePanelTab[] = [memoryPanelTab(storyId, memory), directivesPanelTab(storyId, directives)];
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelTabId, setPanelTabId] = useState<string | null>(null);
+  // `/ooc`만 입력하면 지시 탭으로 패널을 연다 (T18)
+  const openDirectives = () => { setPanelTabId(DIRECTIVES_TAB_ID); setPanelOpen(true); };
+  const afterSystemCommand = (result: SystemCommandResult) => {
+    if (result.record) memory.refresh();
+    if (result.directive) directives.reload();
+  };
 
   const locked = streaming || chat.busy || !chat.loaded;
   const last = chat.messages[chat.messages.length - 1];
@@ -108,11 +115,14 @@ export default function ChatPage() {
         </ImageCatalogContext.Provider>
 
         <ChatInput
+          storyId={storyId}
           streaming={streaming}
           locked={locked}
           canContinue={canContinue}
           onSend={send}
           onContinue={() => { continueStory(); }}
+          onOpenDirectives={openDirectives}
+          onSystemCommand={afterSystemCommand}
           notice={streamError ?? chat.error}
           onDismissNotice={() => { clearStreamError(); chat.clearError(); }}
         />
