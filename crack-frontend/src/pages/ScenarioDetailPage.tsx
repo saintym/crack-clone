@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { documentApi, type CharacterInfo } from '../api/documents';
 import MobileLayout from '../components/layout/MobileLayout';
@@ -18,6 +18,39 @@ export default function ScenarioDetailPage() {
   const [newCharName, setNewCharName] = useState('');
   const [showNewChar, setShowNewChar] = useState(false);
 
+  // 탭이나 시나리오가 바뀌면 편집 상태와 선택된 캐릭터를 초기화한다.
+  // effect 안의 동기 setState 대신 렌더 중 이전 값과 비교해 조정한다
+  // (https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes).
+  const viewKey = `${scenarioName ?? ''}|${tab}`;
+  const [prevViewKey, setPrevViewKey] = useState(viewKey);
+  if (prevViewKey !== viewKey) {
+    setPrevViewKey(viewKey);
+    if (scenarioName) {
+      setEditing(false);
+      setSelectedChar(null);
+    }
+  }
+
+  // setState를 then 콜백 안에서 호출해야 react-hooks/set-state-in-effect가
+  // 비동기 갱신으로 인식한다 (async/await 본문은 동기 호출로 판정됨).
+  const loadDocument = useCallback(
+    (type: string) =>
+      documentApi
+        .get(scenarioName!, type)
+        .then(({ data }) => setContent(data.content))
+        .catch(() => setContent('')),
+    [scenarioName],
+  );
+
+  const loadCharacters = useCallback(
+    () =>
+      documentApi
+        .listCharacters(scenarioName!)
+        .then(({ data }) => setCharacters(data))
+        .catch(() => setCharacters([])),
+    [scenarioName],
+  );
+
   useEffect(() => {
     if (!scenarioName) return;
     if (tab === 'characters') {
@@ -25,27 +58,7 @@ export default function ScenarioDetailPage() {
     } else {
       loadDocument(tab);
     }
-    setEditing(false);
-    setSelectedChar(null);
-  }, [tab, scenarioName]);
-
-  const loadDocument = async (type: string) => {
-    try {
-      const { data } = await documentApi.get(scenarioName!, type);
-      setContent(data.content);
-    } catch {
-      setContent('');
-    }
-  };
-
-  const loadCharacters = async () => {
-    try {
-      const { data } = await documentApi.listCharacters(scenarioName!);
-      setCharacters(data);
-    } catch {
-      setCharacters([]);
-    }
-  };
+  }, [tab, scenarioName, loadCharacters, loadDocument]);
 
   const loadCharacter = async (name: string) => {
     try {

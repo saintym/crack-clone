@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { scenarioApi, type Scenario } from '../api/scenarios';
 import MobileLayout from '../components/layout/MobileLayout';
@@ -11,18 +11,19 @@ export default function ScenariosPage() {
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  const loadScenarios = async () => {
-    try {
-      const { data } = await scenarioApi.list();
-      setScenarios(data);
-    } catch (err) {
-      console.error('Failed to load scenarios', err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // setState를 then 콜백 안에서 호출해야 react-hooks/set-state-in-effect가
+  // 비동기 갱신으로 인식한다 (async/await 본문은 동기 호출로 판정됨).
+  const loadScenarios = useCallback(
+    () =>
+      scenarioApi
+        .list()
+        .then(({ data }) => setScenarios(data))
+        .catch((err) => console.error('Failed to load scenarios', err))
+        .finally(() => setLoading(false)),
+    [],
+  );
 
-  useEffect(() => { loadScenarios(); }, []);
+  useEffect(() => { loadScenarios(); }, [loadScenarios]);
 
   const handleCreate = async () => {
     if (!name.trim() || !title.trim()) return;
