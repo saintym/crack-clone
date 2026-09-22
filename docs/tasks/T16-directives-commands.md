@@ -1,6 +1,6 @@
 # T16 지속 OOC 지시 + `/` 명령 백엔드
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 5
 - **의존**: T13, T14
 - **브랜치**: `task/T16-directives-commands`
@@ -38,3 +38,6 @@ OOC 지시가 20턴쯤 지나면 잊히는 크랙의 문제를 해결한다. 지
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 시작. 로컬 worktree `task/T16-directives-commands`에서 진행.
