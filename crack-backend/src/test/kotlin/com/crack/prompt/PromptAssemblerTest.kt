@@ -94,8 +94,8 @@ class PromptAssemblerTest {
     fun `시스템 프롬프트에 기본 규칙이 포함된다`() {
         val prompt = assembler.assembleSystemPrompt(scenarioPath, storyPath)
 
-        assertTrue(prompt.contains("캐릭터 롤플레이 AI"), "기본 규칙이 포함되어야 한다")
-        assertTrue(prompt.contains("감정 상태를"), "감정 태그 규칙이 포함되어야 한다")
+        assertTrue(prompt.contains("롤플레이 AI 작가"), "기본 규칙이 포함되어야 한다")
+        assertTrue(prompt.contains("감정 태그 형식"), "감정 태그 규칙이 포함되어야 한다")
     }
 
     @Test
