@@ -43,6 +43,17 @@ crack:
         haiku: haiku
     fake:
       enabled: false
+  memory:
+    budget:            # 기억 문서 예산(글자 수). 넘으면 기록 때 압축한다
+      character: 3000
+      protagonist: 4000
+      chronicle: 12000
+    record:            # 기억 기록 파이프라인 (T14)
+      every-turns: 10          # 마지막 기록 이후 이만큼 턴이 쌓이면 자동 기록
+      auto-enabled: true
+      concurrency: 3           # 캐릭터 관리자 동시 실행 수
+      max-attempts: 2          # 최초 1회 + 재시도 1회
+      chronicle-context-entries: 2
   auth:
     password: ${CRACK_PASSWORD:changeme}
     token-secret: ${CRACK_TOKEN_SECRET:change-me-local-secret}
