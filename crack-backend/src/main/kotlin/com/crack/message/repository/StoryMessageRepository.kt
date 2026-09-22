@@ -28,13 +28,13 @@ interface StoryMessageRepository : JpaRepository<StoryMessage, Long> {
     @Query("SELECT MAX(m.turnNo) FROM StoryMessage m WHERE m.storyId = :storyId")
     fun findMaxTurnNo(@Param("storyId") storyId: Long): Int?
 
+    /** 수정된 적 있는 모든 턴. `since` 유무를 한 쿼리에서 `IS NULL`로 분기하면 PostgreSQL이 파라미터 타입을 추론하지 못한다(BUG-008). */
     @Query(
         """
         SELECT DISTINCT m.turnNo FROM StoryMessage m
         WHERE m.storyId = :storyId
           AND m.turnNo BETWEEN :fromTurn AND :throughTurn
           AND m.editedAt IS NOT NULL
-          AND (:since IS NULL OR m.editedAt > :since)
         ORDER BY m.turnNo
         """
     )
@@ -42,7 +42,23 @@ interface StoryMessageRepository : JpaRepository<StoryMessage, Long> {
         @Param("storyId") storyId: Long,
         @Param("fromTurn") fromTurn: Int,
         @Param("throughTurn") throughTurn: Int,
-        @Param("since") since: LocalDateTime?,
+    ): List<Int>
+
+    /** [since] 이후(초과) 수정된 턴. */
+    @Query(
+        """
+        SELECT DISTINCT m.turnNo FROM StoryMessage m
+        WHERE m.storyId = :storyId
+          AND m.turnNo BETWEEN :fromTurn AND :throughTurn
+          AND m.editedAt > :since
+        ORDER BY m.turnNo
+        """
+    )
+    fun findEditedTurnsSince(
+        @Param("storyId") storyId: Long,
+        @Param("fromTurn") fromTurn: Int,
+        @Param("throughTurn") throughTurn: Int,
+        @Param("since") since: LocalDateTime,
     ): List<Int>
 
     @Modifying(flushAutomatically = true, clearAutomatically = true)
