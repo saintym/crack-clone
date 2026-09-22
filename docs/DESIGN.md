@@ -412,6 +412,18 @@ trigger(storyId, reason)
 - 파일: `directives.json` = `[{"id":"uuid","text":"말투는 반말","enabled":true,"createdAt":"…"}]`
 - API: `GET/POST /directives`, `PATCH /directives/{id}`(text, enabled), `DELETE /directives/{id}`
 - 켜진 지시는 BOTTOM 슬롯 기여자가 주입한다
+- **API 형식(T16 확정)**: 모두 `/api/stories/{storyId}` 아래. `Directive = {id, text, enabled, createdAt}`(파일 항목과 같다. `createdAt`은 오프셋 포함 ISO-8601, 초 단위)
+  - `GET /directives` → `Directive[]`(파일 순서 = 추가한 순서). 파일이 없으면 `[]`
+  - `POST /directives` body `{text, enabled?}` → `Directive`(201). `text`는 앞뒤 공백을 떼고, 비면 400. `enabled` 기본 true
+  - `PATCH /directives/{id}` body `{text?, enabled?}` → `Directive`. 준 필드만 바꾼다. `text`가 비면 400, 없는 id는 404
+  - `DELETE /directives/{id}` → 204. 없는 id는 404
+  - `_legacy` 스토리(T09 이전 전)는 쓰기가 400이다(폴더가 시나리오 원본이라서). 파일이 깨져 있으면 쓰기는 500으로 거부하고(덮어쓰지 않는다), 주입은 건너뛴다
+- **주입 형식**: 기여자 `directive.DirectiveContributor`(BOTTOM, order 0, name `directives`). 켜진 지시가 없으면 생략
+  ```
+  다음 지시는 해제될 때까지 항상 지켜라:
+  1. 말투는 반말
+  2. …
+  ```
 
 ### 8.2 `/` 명령 (T16)
 - **시스템 명령**(즉시 실행, 메시지를 남기지 않음, REST로 처리)
@@ -426,6 +438,21 @@ trigger(storyId, reason)
   ```
   - 실행 흐름: `POST /messages`에 `{content: "/일기 오늘은…", command: "일기"}`를 보낸다. 유저 메시지는 `kind = COMMAND`로 저장되고, 명령 프롬프트는 이번 턴의 `turnInstruction`으로만 들어간다.
 - `GET /commands`: 시스템 명령과 사용자 정의 명령 목록(자동완성용)
+- **API 형식(T16 확정)**: 모두 `/api/stories/{storyId}` 아래
+  - `GET /commands` → `[{name, description, type}]`. `type` = `SYSTEM` | `CUSTOM`. 시스템 명령(`기록`, `ooc`)이 먼저, 사용자 정의 명령은 파일 순서. `name`에는 `/`를 붙이지 않는다
+  - `POST /commands/system` body `{name, args?}` → `{name, record, directive}`. 해당하지 않는 필드는 null
+    - `기록`: T14 `trigger(MANUAL)`. `record`는 `POST /memory/record`의 응답(`{result, record}`)과 같다
+    - `ooc`: `args`를 지속 지시로 추가한다. `directive`는 추가된 `Directive`. `args`가 비면 400(패널 열기는 프론트가 처리한다)
+    - 이름은 앞의 `/`를 떼고 대소문자 무시로 비교한다. 모르는 이름은 400
+  - `POST /messages`의 `command`: 앞의 `/`를 떼고 사용자 정의 명령 이름과 비교한다. 모르는 명령이나 시스템 명령이면 400(유저 메시지를 저장하지 않는다)
+- **`commands.md` 파싱**: `## /이름`(또는 `## 이름`) 제목이 명령 하나다. 이름은 제목의 첫 단어. `설명:` 줄이 설명이고, `프롬프트:` 줄과 그 뒤의 줄(다음 제목 전까지)이 프롬프트다. `프롬프트:`가 없으면 `설명:`을 뺀 본문 전체가 프롬프트다. 프롬프트가 빈 명령, 시스템 명령과 같은 이름, 앞에서 이미 나온 이름은 버린다. 파일이 없으면 사용자 정의 명령이 없다
+- **이번 턴 지시 형식**: 명령 프롬프트 + args(`content`에서 앞의 `/이름`을 뗀 나머지, 비면 생략)
+  ```
+  [/일기 명령] 지금까지의 일을 주인공 시점의 일기로 써라. 이야기는 진행하지 마라.
+  요청: 오늘은…
+  ```
+  - **재생성**: 재생성 대상 턴의 유저 메시지가 `COMMAND`면 `content`의 `/이름`으로 명령을 다시 찾아 같은 지시를 넣는다(재생성 지시가 있으면 뒤에 잇는다). 그사이 명령이 사라졌으면 지시 없이 생성한다
+  - 다음 턴부터는 넣지 않는다. 대화 원문에는 유저 메시지 `content`(`/일기 오늘은…`)가 그대로 남는다
 
 ### 8.3 키워드북 (T17)
 - **`keywords.md` 형식:**
