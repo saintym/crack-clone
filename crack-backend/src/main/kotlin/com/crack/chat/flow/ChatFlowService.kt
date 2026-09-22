@@ -14,7 +14,7 @@ import com.crack.message.entity.MessageRole
 import com.crack.message.entity.StoryMessage
 import com.crack.message.repository.StoryMessageRepository
 import com.crack.message.service.MessageService
-import com.crack.prompt.service.PromptAssembler
+import com.crack.prompt.service.LegacyPromptAssembler
 import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.entity.Story
 import com.crack.story.repository.StoryRepository
@@ -41,7 +41,7 @@ class ChatFlowService(
     private val storyRepository: StoryRepository,
     private val scenarioRepository: ScenarioRepository,
     private val dataPaths: DataPaths,
-    private val promptAssembler: PromptAssembler,
+    private val promptAssembler: LegacyPromptAssembler,
     private val conversationBuilder: ConversationBuilder,
     private val aiGateway: AiGateway,
     private val generationLock: StoryGenerationLock,

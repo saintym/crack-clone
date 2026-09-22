@@ -7,8 +7,15 @@ import org.springframework.stereotype.Service
 import java.nio.file.Files
 import java.nio.file.Path
 
+/**
+ * v1 프롬프트 조립기(T08 격리까지 반영). 모든 인물을 넣고, 옛 파일 기반 대화(`chat/chat_latest.md`, 요약)를 읽는다.
+ *
+ * 옛 `/chat` 흐름([com.crack.chat.service.ChatService])만 쓴다. 새 흐름은 v2 [PromptAssembler](DESIGN.md §6, T13)다.
+ * T12가 옛 흐름과 함께 삭제한다. T13의 v1 대비 크기 비교(`PromptSizeComparisonTest`)에도 쓴다.
+ */
+@Deprecated("T13 이후 새 흐름은 PromptAssembler(v2). 옛 /chat 흐름 전용이며 T12에서 삭제")
 @Service
-class PromptAssembler {
+class LegacyPromptAssembler {
     private val log = LoggerFactory.getLogger(javaClass)
 
     companion object {

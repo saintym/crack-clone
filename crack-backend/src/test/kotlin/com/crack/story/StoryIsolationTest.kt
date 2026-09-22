@@ -1,7 +1,7 @@
 package com.crack.story
 
 import com.crack.global.config.DataPaths
-import com.crack.prompt.service.PromptAssembler
+import com.crack.prompt.service.LegacyPromptAssembler
 import com.crack.scenario.entity.Scenario
 import com.crack.scenario.repository.ScenarioRepository
 import com.crack.story.dto.StoryCreateRequest
@@ -46,7 +46,7 @@ class StoryIsolationTest {
     @Autowired lateinit var scenarioRepository: ScenarioRepository
     @Autowired lateinit var storyRepository: StoryRepository
     @Autowired lateinit var dataPaths: DataPaths
-    @Autowired lateinit var promptAssembler: PromptAssembler
+    @Autowired lateinit var promptAssembler: LegacyPromptAssembler
 
     private lateinit var scenario: Scenario
     private lateinit var scenarioDir: Path

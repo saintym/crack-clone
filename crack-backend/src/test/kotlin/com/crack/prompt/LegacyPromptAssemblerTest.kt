@@ -1,15 +1,16 @@
 package com.crack.prompt
 
 import com.crack.ai.dto.MessageRole
-import com.crack.prompt.service.PromptAssembler
+import com.crack.prompt.service.LegacyPromptAssembler
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Assertions.*
 import java.nio.file.Files
 import java.nio.file.Path
 
-class PromptAssemblerTest {
+@Suppress("DEPRECATION")
+class LegacyPromptAssemblerTest {
 
-    private lateinit var assembler: PromptAssembler
+    private lateinit var assembler: LegacyPromptAssembler
     private lateinit var tempDir: Path
     private lateinit var scenarioPath: Path
     private lateinit var storyPath: Path
@@ -17,7 +18,7 @@ class PromptAssemblerTest {
     @BeforeEach
     fun setUp() {
         tempDir = Files.createTempDirectory("crack-prompt-test")
-        assembler = PromptAssembler()
+        assembler = LegacyPromptAssembler()
 
         // 시나리오 디렉토리 (템플릿)
         scenarioPath = tempDir.resolve("scenario")
