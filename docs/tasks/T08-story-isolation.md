@@ -29,7 +29,7 @@
 5. 픽스처 `sample-scenario`: world, scenario, prologue, 인물 2명(별칭 포함), protagonist, keywords, commands, images. 리모트 에이전트의 수동 확인에도 쓴다.
 
 ## 완료 조건
-- [x] `./gradlew test` 통과 (278개, 기준선 231 + 신규 47)
+- [x] `./gradlew test` 통과 (278개, 기준선 221 + 신규 57)
 - [x] **격리 테스트**
   - 스토리 A에서 인물 문서를 수정해도 원본과 스토리 B는 그대로다
   - 원본을 수정해도 기존 스토리는 그대로이고, 새 스토리에는 반영된다
@@ -67,7 +67,7 @@
 - `StoryDirs`를 `story/files`에 둔 이유: T13 기여자, T14 파이프라인, T16 지시 등 스토리 폴더가 필요한 곳에서 같은 방식으로 찾게 하려는 것이다.
 
 **확인 방법**
-- `cd crack-backend && ./gradlew test`: 278개 전부 통과(기준선 231 + 신규 47).
+- `cd crack-backend && ./gradlew test`: 278개 전부 통과(기준선 221 + 신규 57).
 - `StoryIsolationTest`가 완료 조건의 격리 시나리오를 API 수준으로 검증한다: 스토리 A 인물 문서 PUT → B와 원본 불변, A/B 프롬프트 차이 확인 / 원본 편집 API로 world 수정 → 기존 스토리 불변, 새 스토리 반영 / `../`, 다른 스토리 폴더, 절대 경로, `images.md`, `story.json` → 400이고 어떤 파일도 바뀌지 않음 / DELETE 스토리 → 해당 폴더만 삭제, 원본 전 파일이 픽스처와 동일.
 
 **겪은 문제**
