@@ -18,6 +18,9 @@ import { useMemoryStatus } from '../components/panels/memory/useMemoryStatus';
 import { memoryPanelTab } from '../components/panels/memory/memoryPanelTab';
 import MemoryBadge from '../components/panels/memory/MemoryBadge';
 import { statusPanelTab } from '../components/panels/status/statusPanelTab';
+import { useDirectives } from '../components/panels/directives/useDirectives';
+import { directivesPanelTab, DIRECTIVES_TAB_ID } from '../components/panels/directives/directivesPanelTab';
+import type { SystemCommandResult } from '../api/commands';
 import type { SidePanelTab } from '../types/panel';
 
 /** 채팅 화면. 상태는 훅에, 화면 조각은 components/chat에 두고 여기서는 조립만 한다. */
@@ -47,8 +50,20 @@ export default function ChatPage() {
   // 기억 뱃지: 턴이 끝나거나 메시지가 지워질 때(생성 중이 아닐 때 마지막 메시지가 바뀌면) 기록 상태를 다시 확인한다
   const memoryKey = chat.loaded && !streaming ? `${chat.messages.length}:${chat.messages.at(-1)?.id}` : null;
   const memory = useMemoryStatus(storyId, chat.memory, memoryKey);
-  const panelTabs: SidePanelTab[] = [memoryPanelTab(storyId, memory), statusPanelTab(storyId, memory.status)];
+  const directives = useDirectives(storyId);
+  const panelTabs: SidePanelTab[] = [
+    memoryPanelTab(storyId, memory),
+    directivesPanelTab(storyId, directives),
+    statusPanelTab(storyId, memory.status),
+  ];
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelTabId, setPanelTabId] = useState<string | null>(null);
+  // `/ooc`만 입력하면 지시 탭으로 패널을 연다 (T18)
+  const openDirectives = () => { setPanelTabId(DIRECTIVES_TAB_ID); setPanelOpen(true); };
+  const afterSystemCommand = (result: SystemCommandResult) => {
+    if (result.record) memory.refresh();
+    if (result.directive) directives.reload();
+  };
 
   const locked = streaming || chat.busy || !chat.loaded;
   const last = chat.messages[chat.messages.length - 1];
@@ -105,17 +120,26 @@ export default function ChatPage() {
         </ImageCatalogContext.Provider>
 
         <ChatInput
+          storyId={storyId}
           streaming={streaming}
           locked={locked}
           canContinue={canContinue}
           onSend={send}
           onContinue={() => { continueStory(); }}
+          onOpenDirectives={openDirectives}
+          onSystemCommand={afterSystemCommand}
           notice={streamError ?? chat.error}
           onDismissNotice={() => { clearStreamError(); chat.clearError(); }}
         />
       </div>
 
-      <SidePanel open={panelOpen} onClose={() => setPanelOpen(false)} tabs={panelTabs} />
+      <SidePanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        tabs={panelTabs}
+        activeTabId={panelTabId}
+        onSelectTab={setPanelTabId}
+      />
 
       {branching !== null && (
         <BranchDialog

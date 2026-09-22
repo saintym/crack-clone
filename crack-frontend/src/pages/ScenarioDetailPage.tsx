@@ -4,7 +4,14 @@ import { documentApi, type CharacterInfo, type ScenarioDocumentType } from '../a
 import MobileLayout from '../components/layout/MobileLayout';
 import ImageCatalogList from '../components/scenario/ImageCatalogList';
 
-type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist' | 'images';
+type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist' | 'images' | 'keywords' | 'commands';
+
+/** 편집 영역 placeholder (형식 예시, DESIGN.md §8.2·§8.3·§8.5) */
+const PLACEHOLDERS: Partial<Record<Tab, string>> = {
+  images: '- 설월_미소: https://example.com/a.webp | 설월이 옅게 웃는 모습',
+  keywords: '## 천마신교\n키워드: 천마신교, 마교, 신교\n천하를 위협하는 사파의 거대 세력. 교주는 천마라 불린다.',
+  commands: '## /일기\n설명: 주인공의 하루를 일기 형식으로 정리\n프롬프트: 지금까지의 일을 주인공 시점의 일기로 써라. 이야기는 진행하지 마라.',
+};
 
 export default function ScenarioDetailPage() {
   const { scenarioName } = useParams<{ scenarioName: string }>();
@@ -119,6 +126,8 @@ export default function ScenarioDetailPage() {
     { key: 'protagonist', label: '주인공' },
     { key: 'characters', label: '캐릭터' },
     { key: 'images', label: '이미지' },
+    { key: 'keywords', label: '키워드북' },
+    { key: 'commands', label: '명령' },
   ];
 
   return (
@@ -135,12 +144,12 @@ export default function ScenarioDetailPage() {
       }
     >
       {/* Tabs */}
-      <div className="flex border-b border-border/40 bg-bg-secondary/60">
+      <div className="flex overflow-x-auto border-b border-border/40 bg-bg-secondary/60">
         {tabs.map((t) => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
-            className={`flex-1 py-3.5 text-[13px] font-medium transition-all ${
+            className={`flex-1 shrink-0 px-3 py-3.5 whitespace-nowrap text-[13px] font-medium transition-all ${
               tab === t.key
                 ? 'text-accent border-b-2 border-accent'
                 : 'text-text-muted hover:text-text-secondary'
@@ -229,12 +238,29 @@ export default function ScenarioDetailPage() {
               </p>
             )}
 
+            {tab === 'keywords' && (
+              <p className="text-xs text-text-muted mb-3 leading-relaxed">
+                <code className="font-mono">## 제목</code> 아래 <code className="font-mono">키워드: 이름, 별칭</code> 줄과 넣을 내용을 적습니다.
+                최근 대화에 키워드가 나오면 그 항목이 프롬프트에 들어가고, 위에 있는 항목이 우선합니다.
+                새로 만드는 스토리에 복사됩니다. 진행 중인 스토리는 채팅 화면 기억 패널의 문서에서 고칩니다.
+              </p>
+            )}
+
+            {tab === 'commands' && (
+              <p className="text-xs text-text-muted mb-3 leading-relaxed">
+                <code className="font-mono">## /이름</code> 아래 <code className="font-mono">설명:</code>과 <code className="font-mono">프롬프트:</code>를 적으면
+                채팅창에서 <code className="font-mono">/이름 요청</code>으로 쓸 수 있습니다. 프롬프트는 그 턴에만 들어갑니다.
+                <code className="font-mono">/기록</code>, <code className="font-mono">/ooc</code>는 시스템 명령이라 쓸 수 없습니다.
+                새로 만드는 스토리에 복사됩니다. 진행 중인 스토리는 채팅 화면 기억 패널의 문서에서 고칩니다.
+              </p>
+            )}
+
             {editing ? (
               <>
                 <textarea
                   value={editContent}
                   onChange={(e) => setEditContent(e.target.value)}
-                  placeholder={tab === 'images' ? '- 설월_미소: https://example.com/a.webp | 설월이 옅게 웃는 모습' : undefined}
+                  placeholder={PLACEHOLDERS[tab]}
                   className="flex-1 w-full p-4 bg-surface border border-border/40 rounded-2xl text-text-primary text-sm font-mono resize-none focus:outline-none focus:border-accent/60 transition-all min-h-[300px] leading-relaxed"
                 />
                 {tab === 'images' && (
