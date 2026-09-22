@@ -668,6 +668,8 @@ claude:
 
 ## 현재 진행 상황
 
+> **v2 문서로 대체됨 → [Plan-roadmap.md](Plan-roadmap.md), [docs/DESIGN.md](docs/DESIGN.md).** 아래 내용은 v1 당시 기록이다.
+
 ### 완료
 - [x] Phase 1 — 기반 구축 + 문서 관리 (62 테스트 통과)
 - [x] Phase 2 — 채팅 핵심 (Claude API, SSE, 파싱)
