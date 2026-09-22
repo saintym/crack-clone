@@ -91,6 +91,30 @@ class DocumentServiceTest {
     }
 
     @Test
+    fun `선택 문서 타입(prologue, keywords, commands, images)을 쓰고 읽을 수 있다`() {
+        val types = mapOf(
+            DocumentType.PROLOGUE to "prologue.md",
+            DocumentType.KEYWORDS to "keywords.md",
+            DocumentType.COMMANDS to "commands.md",
+            DocumentType.IMAGES to "images.md",
+        )
+        for ((type, fileName) in types) {
+            assertThrows<NotFoundException> { documentService.readDocument("테스트", type) }
+
+            documentService.updateDocument("테스트", type, "# $fileName 내용")
+
+            assertEquals("# $fileName 내용", Files.readString(tempDir.resolve("테스트").resolve(fileName)))
+            val read = documentService.readDocument("테스트", type)
+            assertEquals(type.name.lowercase(), read.type)
+            assertEquals(fileName, read.name)
+        }
+        assertEquals(
+            listOf("world", "scenario", "protagonist", "prologue", "keywords", "commands", "images"),
+            documentService.listDocuments("테스트").map { it.type }
+        )
+    }
+
+    @Test
     fun `존재하지 않는 시나리오 문서 조회 시 예외가 발생한다`() {
         assertThrows<NotFoundException> {
             documentService.readDocument("없는시나리오", DocumentType.WORLD)
