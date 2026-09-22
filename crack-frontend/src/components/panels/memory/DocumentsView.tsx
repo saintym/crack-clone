@@ -7,6 +7,9 @@ import { documentName } from './format';
 
 const CHRONICLE_PATH = 'chronicle.md';
 const USER_NOTE_PATH = 'user_note.md';
+// T18: 이 스토리의 키워드북·명령 (시나리오 원본에서 복사된 것. 여기서 고쳐도 원본과 다른 스토리는 그대로다)
+const KEYWORDS_PATH = 'keywords.md';
+const COMMANDS_PATH = 'commands.md';
 
 interface DocumentsViewProps {
   storyId: number;
@@ -20,7 +23,7 @@ interface Loaded {
   error: string | null;
 }
 
-/** 기억 문서: 연대기 · 주인공 · 인물(목록 → 문서) · 유저노트. 스토리 폴더의 문서만 다룬다(D12) */
+/** 기억 문서: 연대기 · 주인공 · 인물(목록 → 문서) · 유저노트 · 키워드북 · 명령. 스토리 폴더의 문서만 다룬다(D12) */
 export default function DocumentsView({ storyId, reloadKey }: DocumentsViewProps) {
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [selected, setSelected] = useState<{ path: string; title: string } | null>(null);
@@ -74,6 +77,14 @@ export default function DocumentsView({ storyId, reloadKey }: DocumentsViewProps
           {characters.map((d) => (
             <DocumentRow key={d.path} title={documentName(d.path)} onClick={() => open(d.path, documentName(d.path))} />
           ))}
+        </div>
+      </div>
+
+      <div>
+        <h3 className="px-1 mb-1.5 text-[12px] font-medium text-text-muted">이 스토리의 설정</h3>
+        <div className="space-y-1.5">
+          <DocumentRow title="키워드북" hint="키워드가 나오면 넣을 설정" onClick={() => open(KEYWORDS_PATH, '키워드북')} />
+          <DocumentRow title="명령" hint="/ 사용자 정의 명령" onClick={() => open(COMMANDS_PATH, '명령')} />
         </div>
       </div>
     </div>
