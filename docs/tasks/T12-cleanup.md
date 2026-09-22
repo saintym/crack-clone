@@ -1,6 +1,6 @@
 # T12 죽은 코드와 옛 경로 정리
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 3
 - **의존**: T07, T08, T09, T11
 - **브랜치**: `task/T12-cleanup`
@@ -36,3 +36,6 @@ v2로 대체되었거나 쓰이지 않는 코드와 테이블을 지운다.
 - [ ] 상태 `REVIEW` + 작업 로그 + PR
 
 ## 작업 로그
+
+### 2026-09-23
+- 시작. T07·T08·T09·T11 머지된 main(33cbb75)에서 `task/T12-cleanup` 브랜치로 진행. T13(prompt, ConversationBuilder)·T14(memory/record, chat/api)가 병렬 진행 중이라 해당 파일은 건드리지 않는다.
