@@ -6,6 +6,8 @@ import { useStoryContext } from '../hooks/useStoryContext';
 import { useProviders } from '../hooks/useProviders';
 import { useMessages } from '../hooks/useMessages';
 import { useChatStream } from '../hooks/useChatStream';
+import { useImageCatalog } from '../hooks/useImageCatalog';
+import { ImageCatalogContext } from '../components/chat/imageTags';
 import StorySidebar from '../components/chat/StorySidebar';
 import ChatHeader from '../components/chat/ChatHeader';
 import MessageList from '../components/chat/MessageList';
@@ -23,6 +25,7 @@ export default function ChatPage() {
   const { story, scenario, stories, refreshStories } = useStoryContext(storyId);
   const { providers, selectedProvider, setSelectedProvider } = useProviders(storyId);
   const chat = useMessages(storyId, refreshStories);
+  const imageCatalog = useImageCatalog(storyId);
   const { stream, streaming, error: streamError, clearError: clearStreamError, send, regenerate, continueStory } =
     useChatStream({
       storyId,
@@ -79,6 +82,7 @@ export default function ChatPage() {
           onOpenPanel={panelTabs.length > 0 ? () => setPanelOpen(true) : undefined}
         />
 
+        <ImageCatalogContext.Provider value={imageCatalog}>
         <MessageList
           messages={chat.messages}
           stream={stream}
@@ -90,6 +94,7 @@ export default function ChatPage() {
           onEditSave={(msg, content) => chat.editMessage(msg.id, content)}
           onDelete={(msg) => chat.deleteFrom(msg.id)}
         />
+        </ImageCatalogContext.Provider>
 
         <ChatInput
           streaming={streaming}
