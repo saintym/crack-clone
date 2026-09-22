@@ -20,6 +20,7 @@ interface TaggedResponseListener {
  * 응답 첫 줄의 `[감정: …]` 태그를 스트림에서 떼어 낸다 (D19, DESIGN.md §5.3).
  *
  * - 응답 시작부를 첫 줄바꿈까지(최대 [MAX_TAG_LINE]자) 버퍼링한다. 그동안은 delta를 흘리지 않는다.
+ *   단, 버퍼가 태그의 앞부분일 수 없게 되면(예: `[`로 시작하지 않음) 바로 판단을 끝내고 흘린다.
  * - 첫 줄이 [TAG_PATTERN]에 맞으면 그 줄을 버리고, 뒤따르는 공백·빈 줄도 버린다. 감정 값만 기록한다.
  * - 맞지 않으면(줄바꿈 없이 [MAX_TAG_LINE]자를 넘은 경우 포함) 버퍼를 그대로 흘리고 이후는 통과시킨다.
  * - 태그가 여러 delta로 쪼개져 들어와도 버퍼링하므로 delta에 태그 조각이 실리지 않는다.
@@ -61,7 +62,8 @@ class EmotionTagFilter(private val delegate: TaggedResponseListener) : StreamLis
     /** 버퍼로 태그 여부를 판단할 수 있으면 판단하고 상태를 바꾼다. [final]이면 스트림이 끝난 것이다. */
     private fun decide(final: Boolean) {
         val newline = buffer.indexOf("\n")
-        val decidable = final || (newline in 0..MAX_TAG_LINE) || buffer.length > MAX_TAG_LINE
+        val decidable = final || (newline in 0..MAX_TAG_LINE) || buffer.length > MAX_TAG_LINE ||
+            (newline < 0 && !TAG_PREFIX_PATTERN.matches(buffer))
         if (!decidable) return
 
         val text = buffer.toString()
@@ -93,6 +95,9 @@ class EmotionTagFilter(private val delegate: TaggedResponseListener) : StreamLis
         const val MAX_EMOTION_LENGTH = 100
 
         val TAG_PATTERN = Regex("""^\[\s*감정\s*:\s*(.+?)\]\s*$""")
+
+        /** 줄바꿈 전 버퍼가 아직 태그의 앞부분일 수 있는지. 아니면 기다리지 않고 바로 흘린다(`[`로 시작하지 않는 응답 등). */
+        private val TAG_PREFIX_PATTERN = Regex("""^\[\s*(?:감(?:정\s*(?::[^\n]*)?)?)?$""")
 
         /** 전체 응답을 감정 값과 태그를 뗀 본문으로 나눈다. 태그가 없거나 형식이 다르면 원문 그대로. */
         fun parse(text: String): Parsed {

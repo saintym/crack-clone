@@ -71,7 +71,7 @@ class EmotionTagFilterTest {
 
     @Test
     fun `줄바꿈 없이 200자를 넘으면 태그 판단을 그만두고 흘린다`() {
-        val text = "가".repeat(250)
+        val text = "[감정: " + "가".repeat(250) // 태그처럼 시작했지만 닫히지 않는 긴 줄
         val recorder = Recorder()
         val filter = EmotionTagFilter(recorder)
         val chunks = text.chunked(10)
@@ -84,6 +84,27 @@ class EmotionTagFilterTest {
         filter.onComplete(text)
         assertThat(recorder.deltas.joinToString("")).isEqualTo(text)
         assertThat(recorder.body).isEqualTo(text)
+    }
+
+    @Test
+    fun `태그로 시작할 수 없는 응답은 기다리지 않고 바로 흘린다`() {
+        val recorder = Recorder()
+        val filter = EmotionTagFilter(recorder)
+        filter.onDelta("*비가")
+        assertThat(recorder.deltas).containsExactly("*비가")
+        filter.onDelta("[감정: x]")
+        assertThat(recorder.deltas).containsExactly("*비가", "[감정: x]")
+    }
+
+    @Test
+    fun `태그 앞부분인 동안은 기다리고 CR에서 끊겨도 태그를 흘리지 않는다`() {
+        val recorder = Recorder()
+        val filter = EmotionTagFilter(recorder)
+        listOf("[", " 감", "정 ", ": 슬픔]", "\r", "\n본문").forEach(filter::onDelta)
+        filter.onComplete("[ 감정 : 슬픔]\r\n본문")
+
+        assertThat(recorder.deltas).containsExactly("본문")
+        assertThat(recorder.emotion).isEqualTo("슬픔")
     }
 
     @Test
