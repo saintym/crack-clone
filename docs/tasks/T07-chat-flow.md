@@ -69,7 +69,7 @@
 - `chat/api/`: `StoryMessageController`(§5.2 전부), 요청 DTO, 컨트롤러 전용 예외 처리(`StoryMessageExceptionHandler`: 409/400/404를 JSON으로).
 - 옛 `ChatService`: 10턴 자동 요약(`memoryService.summarize`) 호출과 `MemoryService` 의존성 제거, `@Deprecated` 표시. 옛 `/chat` 컨트롤러와 파일 기반 흐름은 그대로 동작한다(T12가 삭제).
 - `docs/DESIGN.md` §5.2: 아래 "새로 정한 것"을 반영(재생성 `messageId`, DELETE 응답, 생성 중 수정 409, continue 400 조건).
-- 테스트 52개 추가: `EmotionTagFilterTest`(18, 파라미터 포함), `ConversationBuilderTest`(6), `StoryGenerationLockTest`(2), `StoryMessageApiTest`(26, `@SpringBootTest` + MockMvc + Fake/스크립트 프로바이더).
+- 테스트 52개 추가: `EmotionTagFilterTest`(19, 파라미터 포함), `ConversationBuilderTest`(6), `StoryGenerationLockTest`(2), `StoryMessageApiTest`(25, `@SpringBootTest` + MockMvc + Fake/스크립트 프로바이더).
 
 **기억 기능은 T14 전까지 꺼져 있다.** 옛 10턴 자동 요약은 파일 기반이라 새 저장소와 맞지 않아 제거했다. 새 흐름은 `AfterTurnHook`만 부르고, 구현 빈이 아직 없다.
 
