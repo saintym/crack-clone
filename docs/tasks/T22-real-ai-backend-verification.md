@@ -1,6 +1,6 @@
 # T22 실제 AI(CLI) 백엔드 기능 실검증
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 7
 - **의존**: T21
 - **브랜치**: `task/T22-real-ai-backend-verification`

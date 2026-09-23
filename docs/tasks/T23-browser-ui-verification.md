@@ -1,6 +1,6 @@
 # T23 브라우저 UI 실검증 (실제 AI)
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 7
 - **의존**: T21
 - **브랜치**: `task/T23-browser-ui-verification`
