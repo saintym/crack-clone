@@ -63,7 +63,8 @@ crack:
       chronicle-context-entries: 2
   auth:
     password: ${CRACK_PASSWORD:changeme}
-    token-secret: ${CRACK_TOKEN_SECRET:change-me-local-secret}
+    token-secret: ${CRACK_TOKEN_SECRET:change-me-local-secret}   # 토큰 HMAC 서명 키. 바꾸면 기존 로그인이 모두 무효
+    token-ttl-hours: 720   # 발급 토큰 유효 기간
 
 claude:
   api-key: ${CLAUDE_API_KEY:}

@@ -11,7 +11,8 @@ import org.springframework.web.filter.OncePerRequestFilter
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 class AuthFilter(
-    private val authConfig: AuthConfig
+    private val authConfig: AuthConfig,
+    private val authTokens: AuthTokens,
 ) : OncePerRequestFilter() {
 
     private val publicPaths = setOf("/api/auth/login", "/api/auth/verify")
@@ -38,7 +39,7 @@ class AuthFilter(
         val auth = request.getHeader("Authorization")
         val token = auth?.removePrefix("Bearer ")?.trim()
 
-        if (token == null || token.length <= 10) {
+        if (!authTokens.isValid(token)) {
             response.status = HttpServletResponse.SC_UNAUTHORIZED
             response.contentType = "application/json"
             response.writer.write("""{"error":"Unauthorized"}""")
