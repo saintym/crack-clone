@@ -45,6 +45,8 @@
 | 6 | [T19](./T19-status-panel.md) | 인물 상태 패널 | T14, T15 |
 | 6 | [T20](./T20-image-catalog.md) | 이미지 카탈로그 | T11, T13 |
 | 6 | [T21](./T21-pg-verification-bugfix.md) | 실제 PostgreSQL 통합 검증 + 버그 수정(BUG-008~010) — 운영 중 추가 | T14, T15 |
+| 7 | [T22](./T22-real-ai-backend-verification.md) | 실제 AI(CLI) 백엔드 기능 실검증 + 기억 프롬프트 품질 튜닝 | T21 |
+| 7 | [T23](./T23-browser-ui-verification.md) | 브라우저 UI 실검증 (실제 AI) | T21 |
 
 진행 흐름 요약 (정확한 의존 관계는 위 표가 기준이다):
 - **웨이브 1:** 7개 동시 진행. 서로 의존하지 않는다
