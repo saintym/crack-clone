@@ -47,7 +47,7 @@
 | 6 | [T21](./T21-pg-verification-bugfix.md) | 실제 PostgreSQL 통합 검증 + 버그 수정(BUG-008~010) — 운영 중 추가 | T14, T15 |
 | 7 | [T22](./T22-real-ai-backend-verification.md) | 실제 AI(CLI) 백엔드 기능 실검증 + 기억 프롬프트 품질 튜닝 | T21 |
 | 7 | [T23](./T23-browser-ui-verification.md) | 브라우저 UI 실검증 (실제 AI) | T21 |
-| 8 | [T24](./T24-world-digest-index.md) | 세계관 다이제스트 + 시나리오 색인, 원문 10턴, 마스터 역할 명시 | T22 |
+| 8 | [T24](./T24-world-digest-index.md) | 세계관 다이제스트 + 시나리오 색인, 원문 글자 예산, 캐시 친화 순서, 마스터 역할 명시 | T22 |
 | 8 | [T25](./T25-deep-query-fallback.md) | 검색이 헛돈 턴의 깊은 질의 1회 | T24 |
 | 9 | [T26](./T26-offscreen-characters.md) | 오프스크린 캐릭터 진행 — **보류**(사용자 테스트 후) | T24, T25 |
 
