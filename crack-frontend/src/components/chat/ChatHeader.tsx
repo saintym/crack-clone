@@ -28,6 +28,8 @@ export default function ChatHeader({
       <div className="flex items-center gap-3 min-w-0">
         <button
           onClick={onOpenSidebar}
+          title="채팅 내역"
+          aria-label="채팅 내역 열기"
           className="lg:hidden text-text-secondary hover:text-text-primary p-1 -ml-1"
         >
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -36,6 +38,8 @@ export default function ChatHeader({
         </button>
         <button
           onClick={() => navigate(scenario ? `/stories/${scenario.name}` : '/')}
+          title="스토리 목록"
+          aria-label="스토리 목록으로"
           className="hidden lg:block text-text-secondary hover:text-text-primary transition-colors p-1 -ml-1"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
