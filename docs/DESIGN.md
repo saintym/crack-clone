@@ -277,8 +277,9 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 - `recorded_through_turn`은 `RecordedTurnSource` 빈에서 읽는다. 빈이 없으면 0(T14 전). 로직은 `ConversationBuilder`(chat/flow)에 있다.
 
 ### 6.2 활성 인물 선택 (D9)
-`state.json.companions` ∪ `KeywordMatcher`가 `recentText`에서 찾은 인물(파일명과 `별칭`). 주인공은 항상 포함한다.
+`state.json.companions` ∪ `KeywordMatcher`가 `recentText`에서 찾은 인물(파일명과 `별칭`).
 - 순서: 동행 인물(`companions` 순서) → 키워드로 찾은 인물(파일명 순). 중복은 한 번만.
+- **주인공은 활성 인물에 넣지 않는다.** `PROTAGONIST` 슬롯이 언제나 따로 넣으므로, 이 목록과 `prompt-preview`의 `activeCharacters`에는 주인공이 들어가지 않는다(구현과 일치하도록 T22에서 문구를 고쳤다).
 - `companions`의 이름은 파일명과 먼저 비교하고, 없으면 별칭과 정확히 같은 인물을 쓴다. 둘 다 없으면 버린다.
 - 구현: `prompt.contributor.ActiveCharacterSelector`.
 
