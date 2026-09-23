@@ -37,13 +37,16 @@
 
 ## 2. 사용자가 직접 해야 할 일 (리모트 작업 전에)
 
-### 2.1 로컬 설정 갱신 (필수)
-`crack-backend/src/main/resources/application.yml`은 gitignore 대상이라 자동으로 갱신되지 않는다. [application.yml.example](../crack-backend/src/main/resources/application.yml.example)을 보고 아래를 채운다.
-- `crack.ai.cli.path` — `claude`가 PATH에 없으면 절대 경로. **옛 키 `crack.ai.claude-cli-path`는 더 이상 읽지 않는다.**
-- `crack.ai.purpose-tiers`, `crack.ai.cli.models`, `crack.ai.fake.enabled`
-- `claude.model` / `opus-model` / `haiku-model` — 최신 ID(`claude-sonnet-5`, `claude-opus-5`, `claude-haiku-4-5-20251001`)
-- `crack.memory.budget.*`, `crack.memory.record.*`, `crack.prompt.*`, `crack.image.*`
-- `spring.jpa.open-in-view: false` 유지(생성 중 DB 커넥션을 잡고 있지 않도록)
+### 2.1 로컬 설정 갱신 — **완료 (2026-09-24)**
+`crack-backend/src/main/resources/application.yml`(gitignore 대상)을 v2 키로 갱신해 두었다. 비밀값(DB 비밀번호, 인증 비밀번호, 토큰 시크릿)은 기존 값을 그대로 두었다.
+- `crack.ai.purpose-tiers`, `crack.ai.cli.path|timeout-seconds|models`, `crack.ai.fake.enabled` 추가. `path`는 기본값 `claude`(PATH에 있음). **옛 키 `crack.ai.claude-cli-path`는 더 이상 읽지 않는다.**
+- `crack.prompt.*`, `crack.image.*`, `crack.memory.budget.*`, `crack.memory.record.*`, `crack.migration.legacy.enabled` 추가
+- `claude.model` / `opus-model` → `claude-sonnet-5` / `claude-opus-5`로 갱신
+- 모든 키 이름을 `@ConfigurationProperties` 클래스와 대조해 확인했다. YAML 파싱도 확인했다.
+- 환경변수로 덮어쓸 수 있게 해 둔 것: `CRACK_AI_FAKE`(AI 없이 띄울 때 true), `CRACK_MIGRATION_LEGACY_ENABLED`(§2.2), `CRACK_CLAUDE_CLI_PATH`
+- 남은 참고: DB 비밀번호가 평문이다. 환경변수(`DB_PASSWORD`)로 옮기는 것은 사용자 판단에 맡겼다.
+
+> ⚠️ **앱을 처음 실행하면 Flyway가 V4~V7을 사용자 DB에 적용한다.** 되돌리기 어려우므로 **§2.2의 백업을 먼저** 하고 실행한다. 실행만 해도 스키마는 바뀌고, 옛 대화 이전(§2.2)은 별도로 켜야 한다.
 
 ### 2.2 기존 데이터 이전 (T09, 1회)
 **이전하기 전까지 옛 기본 스토리(`_legacy`)는 시나리오 원본 폴더를 직접 읽고 쓴다.** 즉 스토리 격리가 적용되지 않는다.
