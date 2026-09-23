@@ -109,6 +109,44 @@ class RecordOutputParserTest {
     }
 
     @Test
+    fun `회차 제목 줄이 붙어 온 chronicle과 revised 본문에서 제목을 뗀다 - BUG-012`() {
+        val text = """
+            <chronicle>
+            ## 회차 2 (턴 4–6)
+            - 능선을 넘음 (t5)
+            </chronicle>
+            <state>{}</state>
+            <involved>없음</involved>
+            <revised entry="1">
+            ### 회차 1 (턴 1-3)
+            - 고친 회차 (t3)
+            </revised>
+        """.trimIndent()
+
+        val out = RecordOutputParser.parseScenario(text, hasNewTurns = true)
+
+        assertThat(out.chronicle).isEqualTo("- 능선을 넘음 (t5)")
+        assertThat(out.revised).containsExactlyEntriesOf(mapOf(1 to "- 고친 회차 (t3)"))
+    }
+
+    @Test
+    fun `회차 제목이 아닌 제목 줄은 그대로 둔다`() {
+        assertThat(RecordOutputParser.stripEntryHeading("## 장 요약\n- a")).isEqualTo("## 장 요약\n- a")
+        assertThat(RecordOutputParser.stripEntryHeading("- 회차 2 이야기 (t5)")).isEqualTo("- 회차 2 이야기 (t5)")
+        assertThat(RecordOutputParser.stripEntryHeading("## 회차 10 (턴 91–100)")).isEmpty()
+    }
+
+    @Test
+    fun `제목 줄만 온 chronicle은 빈 본문으로 보고 실패한다`() {
+        assertThatThrownBy {
+            RecordOutputParser.parseScenario(
+                "<chronicle>## 회차 2 (턴 4–6)</chronicle><state>{}</state><involved>없음</involved>",
+                hasNewTurns = true,
+            )
+        }.isInstanceOf(RecordFormatException::class.java)
+    }
+
+    @Test
     fun `모든 관리자 프롬프트에 기록 기준이 그대로 들어 있고 출력 태그를 지시한다`() {
         val prompts = mapOf(
             RecordPrompts.SCENARIO_MANAGER to listOf("<chronicle>", "<state>", "<involved>"),

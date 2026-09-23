@@ -34,14 +34,17 @@ object RecordOutputParser {
     private val NAME_SEPARATORS = Regex("""\s*[,，、\n]\s*""")
     private val REVISED = Regex("""<revised\s+entry\s*=\s*["']?(\d+)["']?\s*>([\s\S]*?)</revised>""", RegexOption.IGNORE_CASE)
 
+    /** 회차 제목 줄(`## 회차 2 (턴 4–6)`). 제목은 시스템이 붙이므로 본문에 붙어 오면 뗀다(BUG-012). */
+    private val ENTRY_HEADING = Regex("""^회차\s*\d+""")
+
     fun parseScenario(text: String, hasNewTurns: Boolean): ScenarioOutput {
         val chronicleRaw = requireTag(text, "chronicle", allowEmpty = !hasNewTurns)
-        val chronicle = chronicleRaw.takeUnless { isNone(it) }
+        val chronicle = chronicleRaw.takeUnless { isNone(it) }?.let { stripEntryHeading(it) }?.takeUnless { isNone(it) }
         if (hasNewTurns && chronicle == null) throw RecordFormatException("<chronicle>이 비어 있습니다")
         val state = parseState(requireTag(text, "state"))
         val involved = parseNames(requireTag(text, "involved", allowEmpty = true))
         val revised = REVISED.findAll(text).mapNotNull { m ->
-            val body = unfence(m.groupValues[2]).trim()
+            val body = stripEntryHeading(unfence(m.groupValues[2]).trim())
             if (isNone(body)) null else m.groupValues[1].toInt() to body
         }.toMap()
         return ScenarioOutput(chronicle, state, involved, revised)
@@ -122,6 +125,23 @@ object RecordOutputParser {
         val firstNl = trimmed.indexOf('\n')
         if (firstNl < 0 || !trimmed.endsWith(fence)) return body
         return trimmed.substring(firstNl + 1, trimmed.length - 3)
+    }
+
+    /**
+     * 연대기 회차 본문 맨 앞에 붙어 온 `## 회차 N (턴 a–b)` 제목 줄(수준 무관)을 뗀다.
+     *
+     * 회차 제목은 시스템이 붙인다(DESIGN.md §7.1). 모델이 제목까지 써 보내면 제목이 두 줄로 겹쳐
+     * 같은 번호의 회차가 둘이 되고, 다음 재반영이 빈 회차를 고치게 된다(BUG-012).
+     */
+    fun stripEntryHeading(body: String): String {
+        val lines = body.trim().lines()
+        val first = lines.firstOrNull() ?: return body.trim()
+        val m = Regex("""^#{1,6}\s+(.*?)\s*$""").find(first) ?: return body.trim()
+        return if (ENTRY_HEADING.containsMatchIn(m.groupValues[1].trim())) {
+            lines.drop(1).joinToString("\n").trim()
+        } else {
+            body.trim()
+        }
     }
 
     /** 본문 맨 앞의 `## {title}` 제목 줄(수준 무관)을 뗀다. */
