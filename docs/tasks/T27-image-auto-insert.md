@@ -1,6 +1,6 @@
 # T27 인물 이미지 자동 삽입 + 카탈로그 등록 UX
 
-- **상태**: REVIEW
+- **상태**: DONE
 - **웨이브**: 8
 - **의존**: 없음 (T24와 병렬 가능. 단 `prompt/contributor` 파일이 겹치면 T24를 먼저 머지)
 - **브랜치**: `task/T27-image-auto-insert`
