@@ -1,20 +1,30 @@
 package com.crack.chat.flow
 
+import com.crack.message.dto.ResponseTags
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+/** 첫 줄 감정·인물 태그 필터 (DESIGN.md §5.3, D19·D31) */
 class EmotionTagFilterTest {
 
     private class Recorder : TaggedResponseListener {
         val deltas = mutableListOf<String>()
         var body: String? = null
-        var emotion: String? = null
+        var tags: ResponseTags = ResponseTags.NONE
         var error: Throwable? = null
         override fun onDelta(text: String) { deltas += text }
-        override fun onComplete(body: String, emotion: String?) { this.body = body; this.emotion = emotion }
+        override fun onComplete(body: String, tags: ResponseTags) { this.body = body; this.tags = tags }
         override fun onError(error: Throwable) { this.error = error }
+
+        val emotion: String? get() = tags.emotion
+        val speaker: String? get() = tags.speaker
+        val speakerVariant: String? get() = tags.speakerVariant
+        /** delta에 태그 조각이 하나도 실리지 않았는지 */
+        fun assertNoTagLeak() {
+            assertThat(deltas).noneMatch { it.contains("감정") || it.contains("인물") || it.contains("[") }
+        }
     }
 
     /** [text]를 [chunk]글자씩 흘린 뒤 완료한다. */
@@ -26,17 +36,55 @@ class EmotionTagFilterTest {
         return recorder
     }
 
-    private val tagged = "[감정: 경계심, 호기심]\n\n*그녀가 고개를 들었다.*\n\"누구야.\""
+    private val body = "*그녀가 고개를 들었다.*\n\"누구야.\""
 
     @ParameterizedTest
     @ValueSource(ints = [1, 2, 3, 5, 7, 13, 1000])
     fun `태그가 어떻게 쪼개져 들어와도 delta에 실리지 않고 감정만 분리된다`(chunk: Int) {
-        val r = run(tagged, chunk)
+        val r = run("[감정: 경계심, 호기심]\n\n$body", chunk)
 
-        assertThat(r.deltas.joinToString("")).isEqualTo("*그녀가 고개를 들었다.*\n\"누구야.\"")
-        assertThat(r.deltas).noneMatch { it.contains("감정") || it.contains("[") }
-        assertThat(r.body).isEqualTo("*그녀가 고개를 들었다.*\n\"누구야.\"")
+        assertThat(r.deltas.joinToString("")).isEqualTo(body)
+        r.assertNoTagLeak()
+        assertThat(r.body).isEqualTo(body)
         assertThat(r.emotion).isEqualTo("경계심, 호기심")
+        assertThat(r.speaker).isNull()
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [1, 2, 3, 5, 7, 13, 1000])
+    fun `감정과 인물을 한 줄에 같이 써도 둘 다 떼어 낸다`(chunk: Int) {
+        val r = run("[감정: 슬픔] [인물: 설월/당황]\n\n$body", chunk)
+
+        assertThat(r.deltas.joinToString("")).isEqualTo(body)
+        r.assertNoTagLeak()
+        assertThat(r.body).isEqualTo(body)
+        assertThat(r.emotion).isEqualTo("슬픔")
+        assertThat(r.speaker).isEqualTo("설월")
+        assertThat(r.speakerVariant).isEqualTo("당황")
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [1, 4, 1000])
+    fun `인물 태그만 있어도 떼어 낸다`(chunk: Int) {
+        val r = run("[인물: 설월]\n$body", chunk)
+
+        assertThat(r.deltas.joinToString("")).isEqualTo(body)
+        r.assertNoTagLeak()
+        assertThat(r.emotion).isNull()
+        assertThat(r.speaker).isEqualTo("설월")
+        assertThat(r.speakerVariant).isNull()
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [1, 6, 1000])
+    fun `태그를 줄을 나눠 써도 두 줄까지 떼어 낸다`(chunk: Int) {
+        val r = run("[인물: 설월 / 분노]\n[감정: 분노]\n\n$body", chunk)
+
+        assertThat(r.deltas.joinToString("")).isEqualTo(body)
+        r.assertNoTagLeak()
+        assertThat(r.emotion).isEqualTo("분노")
+        assertThat(r.speaker).isEqualTo("설월")
+        assertThat(r.speakerVariant).isEqualTo("분노")
     }
 
     @ParameterizedTest
@@ -48,16 +96,28 @@ class EmotionTagFilterTest {
         assertThat(r.deltas.joinToString("")).isEqualTo(text)
         assertThat(r.body).isEqualTo(text)
         assertThat(r.emotion).isNull()
+        assertThat(r.speaker).isNull()
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [1, 5, 1000])
+    fun `태그 뒤에 본문이 같은 줄에 붙어 있어도 태그만 뗀다`(chunk: Int) {
+        val r = run("[감정: 기쁨] [인물: 설월/미소] 그리고 본문이 같은 줄에 있다\n다음 줄", chunk)
+
+        assertThat(r.deltas.joinToString("")).isEqualTo("그리고 본문이 같은 줄에 있다\n다음 줄")
+        r.assertNoTagLeak()
+        assertThat(r.body).isEqualTo("그리고 본문이 같은 줄에 있다\n다음 줄")
+        assertThat(r.emotion).isEqualTo("기쁨")
+        assertThat(r.speaker).isEqualTo("설월")
     }
 
     @Test
-    fun `형식이 다른 태그는 그대로 통과한다`() {
-        val text = "[감정: 기쁨] 그리고 본문이 같은 줄에 있다\n다음 줄"
-        val r = run(text, 3)
+    fun `본문 중간의 태그 모양 문장은 건드리지 않는다`() {
+        val text = "*문이 열렸다.*\n[인물: 설월]이라고 쓰인 팻말이 있었다."
+        val r = run(text, 7)
 
-        assertThat(r.deltas.joinToString("")).isEqualTo(text)
         assertThat(r.body).isEqualTo(text)
-        assertThat(r.emotion).isNull()
+        assertThat(r.speaker).isNull()
     }
 
     @Test
@@ -108,12 +168,27 @@ class EmotionTagFilterTest {
     }
 
     @Test
+    fun `인물 태그 앞부분인 동안도 기다린다`() {
+        val recorder = Recorder()
+        val filter = EmotionTagFilter(recorder)
+        listOf("[인", "물: 설", "월/당황", "]").forEach(filter::onDelta)
+        assertThat(recorder.deltas).isEmpty()
+        filter.onDelta("\n본문")
+        filter.onComplete("[인물: 설월/당황]\n본문")
+
+        assertThat(recorder.deltas).containsExactly("본문")
+        assertThat(recorder.speaker).isEqualTo("설월")
+        assertThat(recorder.speakerVariant).isEqualTo("당황")
+    }
+
+    @Test
     fun `태그만 있고 본문이 없으면 본문은 빈 문자열이다`() {
-        val r = run("[감정: 무표정]", 3)
+        val r = run("[감정: 무표정] [인물: 설월]", 3)
 
         assertThat(r.deltas).isEmpty()
         assertThat(r.body).isEmpty()
         assertThat(r.emotion).isEqualTo("무표정")
+        assertThat(r.speaker).isEqualTo("설월")
     }
 
     @Test
@@ -125,9 +200,20 @@ class EmotionTagFilterTest {
     }
 
     @Test
-    fun `긴 감정 값은 칼럼 크기로 자른다`() {
-        val parsed = EmotionTagFilter.parse("[감정: ${"가".repeat(150)}]\n본문")
-        assertThat(parsed.emotion).hasSize(EmotionTagFilter.MAX_EMOTION_LENGTH)
+    fun `긴 값은 칼럼 크기로 자른다`() {
+        val parsed = EmotionTagFilter.parse("[감정: ${"가".repeat(150)}] [인물: ${"나".repeat(120)}/${"다".repeat(70)}]\n본문")
+
+        assertThat(parsed.tags.emotion).hasSize(ResponseTags.MAX_EMOTION)
+        assertThat(parsed.tags.speaker).hasSize(ResponseTags.MAX_SPEAKER)
+        assertThat(parsed.tags.speakerVariant).hasSize(ResponseTags.MAX_VARIANT)
+        assertThat(parsed.body).isEqualTo("본문")
+    }
+
+    @Test
+    fun `빈 태그 값은 null이다`() {
+        val parsed = EmotionTagFilter.parse("[감정: ] [인물:  ]\n본문")
+
+        assertThat(parsed.tags).isEqualTo(ResponseTags.NONE)
         assertThat(parsed.body).isEqualTo("본문")
     }
 

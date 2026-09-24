@@ -4,6 +4,7 @@ import com.crack.global.config.DataPaths
 import com.crack.memory.docs.AtomicFiles
 import com.crack.memory.docs.MemoryDocs
 import com.crack.memory.docs.StoryState
+import com.crack.message.dto.ResponseTags
 import com.crack.message.entity.MessageKind
 import com.crack.message.entity.MessageRole
 import com.crack.message.repository.StoryMessageRepository
@@ -283,7 +284,7 @@ class LegacyStoryMigrator(
                             MessageRole.USER -> MessageKind.NORMAL
                             MessageRole.ASSISTANT -> MessageKind.CONTINUATION
                         }
-                        messageService.appendAssistant(storyId, split.content, split.emotion, kind)
+                        messageService.appendAssistant(storyId, split.content, ResponseTags.of(split.emotion), kind)
                     }
                 }
                 prev = msg.role

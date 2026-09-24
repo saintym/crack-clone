@@ -9,6 +9,7 @@ import com.crack.global.exception.NotFoundException
 import com.crack.memory.record.MemoryRecordService
 import com.crack.memory.record.MemoryStatusView
 import com.crack.message.dto.MessageView
+import com.crack.message.dto.ResponseTags
 import com.crack.message.dto.TruncateResult
 import com.crack.message.entity.MessageKind
 import com.crack.message.entity.MessageRole
@@ -32,7 +33,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
  * - **실패 시 원본 보존.** 재생성 후보는 성공했을 때만 추가한다. 전송이 실패하면 유저 메시지는 남는다.
  * - **스토리당 생성 1개.** 생성 중에는 새 생성뿐 아니라 후보 선택·수정·삭제도 409로 막는다
  *   (생성 도중 대화가 바뀌어 응답이 엉뚱한 자리에 저장되는 것을 막는다).
- * - 감정 태그는 [EmotionTagFilter]가 스트림에서 떼어 내고 `emotion` 칼럼에만 저장한다(§5.3).
+ * - 첫 줄 감정·인물 태그는 [EmotionTagFilter]가 스트림에서 떼어 내고 `emotion`·`speaker`·`speaker_variant` 칼럼에만 저장한다(§5.3).
  * - 프롬프트는 [PromptAssembler](v2, DESIGN.md §6)가 만든다. 이번 턴 지시는 BOTTOM 슬롯(`[지시]` 블록)으로 들어간다.
  * - 사용자 정의 `/` 명령(T16, DESIGN.md §8.2)은 유저 메시지를 `COMMAND`로 저장하고, 명령 프롬프트를 그 턴의 지시로만 넣는다.
  *   그 턴을 재생성할 때도 같은 지시를 다시 넣는다.
@@ -87,8 +88,8 @@ class ChatFlowService(
             val emitter = newEmitter()
             sendEarly(emitter, SseEvents.USER, messageService.view(user))
             launch(story, ticket, emitter, provider, GenerationMode.SEND,
-                { promptAssembler.assemble(storyId, turnInstruction = turnInstruction) }) { body, emotion ->
-                messageService.appendAssistant(storyId, body, emotion, MessageKind.NORMAL, turnNo = user.turnNo)
+                { promptAssembler.assemble(storyId, turnInstruction = turnInstruction) }) { body, tags ->
+                messageService.appendAssistant(storyId, body, tags, MessageKind.NORMAL, turnNo = user.turnNo)
             }
             emitter
         }
@@ -114,8 +115,8 @@ class ChatFlowService(
             if (last.role == MessageRole.USER) {
                 val turnInstruction = ConversationBuilder.combine(commandInstructionFor(storyId, last), trimmedInstruction)
                 launch(story, ticket, emitter, provider, GenerationMode.REGENERATE,
-                    { promptAssembler.assemble(storyId, turnInstruction = turnInstruction) }) { body, emotion ->
-                    messageService.appendAssistant(storyId, body, emotion, MessageKind.NORMAL, turnNo = last.turnNo)
+                    { promptAssembler.assemble(storyId, turnInstruction = turnInstruction) }) { body, tags ->
+                    messageService.appendAssistant(storyId, body, tags, MessageKind.NORMAL, turnNo = last.turnNo)
                 }
             } else {
                 if (last.kind == MessageKind.PROLOGUE) throw BadRequestException("프롤로그는 재생성할 수 없습니다")
@@ -127,8 +128,8 @@ class ChatFlowService(
                     ConversationBuilder.combine(user?.let { commandInstructionFor(storyId, it) }, trimmedInstruction)
                 }
                 launch(story, ticket, emitter, provider, GenerationMode.REGENERATE,
-                    { promptAssembler.assemble(storyId, beforeSeq = last.seq, turnInstruction = turnInstruction) }) { body, emotion ->
-                    messageService.addVariant(last.id, body, emotion, trimmedInstruction)
+                    { promptAssembler.assemble(storyId, beforeSeq = last.seq, turnInstruction = turnInstruction) }) { body, tags ->
+                    messageService.addVariant(last.id, body, tags, trimmedInstruction)
                 }
             }
             emitter
@@ -146,8 +147,8 @@ class ChatFlowService(
             }
             val emitter = newEmitter()
             launch(story, ticket, emitter, provider, GenerationMode.CONTINUE,
-                { promptAssembler.assemble(storyId, turnInstruction = ConversationBuilder.CONTINUE_INSTRUCTION) }) { body, emotion ->
-                messageService.appendAssistant(storyId, body, emotion, MessageKind.CONTINUATION)
+                { promptAssembler.assemble(storyId, turnInstruction = ConversationBuilder.CONTINUE_INSTRUCTION) }) { body, tags ->
+                messageService.appendAssistant(storyId, body, tags, MessageKind.CONTINUATION)
             }
             emitter
         }
@@ -210,13 +211,13 @@ class ChatFlowService(
         provider: String?,
         mode: GenerationMode,
         prompt: () -> AssembledPrompt,
-        save: (body: String, emotion: String?) -> StoryMessage,
+        save: (body: String, tags: ResponseTags) -> StoryMessage,
     ) {
         val listener = GenerationStreamListener(
             storyId = story.id,
             emitter = emitter,
             ticket = ticket,
-            save = { body, emotion -> messageService.view(save(body, emotion)) },
+            save = { body, tags -> messageService.view(save(body, tags)) },
             afterSave = { saved -> runAfterTurnHooks(story.id, saved, mode) },
         )
         val filter = EmotionTagFilter(listener)

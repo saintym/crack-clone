@@ -25,6 +25,14 @@ class MessageVariant(
     @Column(length = 100)
     var emotion: String? = null,
 
+    /** 이 후보의 중심 인물 이름 (DESIGN.md §5.3) */
+    @Column(length = 100)
+    var speaker: String? = null,
+
+    /** 이 후보의 인물 이미지 변형 이름 */
+    @Column(name = "speaker_variant", length = 50)
+    var speakerVariant: String? = null,
+
     /** 재생성 지시 (선택) */
     @Column(columnDefinition = "TEXT")
     val instruction: String? = null,

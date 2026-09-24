@@ -2,6 +2,7 @@ package com.crack.message
 
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
+import com.crack.message.dto.ResponseTags
 import com.crack.message.entity.MessageKind
 import com.crack.message.entity.MessageRole
 import com.crack.message.repository.MessageVariantRepository
@@ -63,7 +64,7 @@ class MessageServiceTest {
         @Test
         fun `유저 메시지는 새 턴을 열고 응답은 같은 턴이다`() {
             val u1 = messageService.appendUser(storyId, "안녕")
-            val a1 = messageService.appendAssistant(storyId, "반갑소", emotion = "경계심")
+            val a1 = messageService.appendAssistant(storyId, "반갑소", ResponseTags(emotion = "경계심"))
             val u2 = messageService.appendUser(storyId, "이름이 뭐요")
             val a2 = messageService.appendAssistant(storyId, "설월이오", turnNo = u2.turnNo)
 
@@ -142,7 +143,7 @@ class MessageServiceTest {
         @Test
         fun `첫 응답을 저장하면 후보 0번이 함께 생긴다`() {
             messageService.appendUser(storyId, "안녕")
-            val a = messageService.appendAssistant(storyId, "반갑소", emotion = "경계심")
+            val a = messageService.appendAssistant(storyId, "반갑소", ResponseTags(emotion = "경계심"))
 
             assertEquals(0, a.selectedVariant)
             assertEquals("경계심", a.emotion)
@@ -156,9 +157,9 @@ class MessageServiceTest {
         @Test
         fun `후보를 추가하면 선택되고 content와 emotion이 동기화된다`() {
             messageService.appendUser(storyId, "안녕")
-            val a = messageService.appendAssistant(storyId, "반갑소", emotion = "경계심")
+            val a = messageService.appendAssistant(storyId, "반갑소", ResponseTags(emotion = "경계심"))
 
-            val updated = messageService.addVariant(a.id, "누구시오", "의심", "더 차갑게")
+            val updated = messageService.addVariant(a.id, "누구시오", ResponseTags("의심"), "더 차갑게")
             assertEquals(1, updated.selectedVariant)
             assertEquals("누구시오", updated.content)
             assertEquals("의심", updated.emotion)
@@ -174,8 +175,8 @@ class MessageServiceTest {
         @Test
         fun `후보를 선택하면 content와 emotion이 그 후보로 바뀐다`() {
             messageService.appendUser(storyId, "안녕")
-            val a = messageService.appendAssistant(storyId, "반갑소", emotion = "경계심")
-            messageService.addVariant(a.id, "누구시오", "의심", null)
+            val a = messageService.appendAssistant(storyId, "반갑소", ResponseTags(emotion = "경계심"))
+            messageService.addVariant(a.id, "누구시오", ResponseTags("의심"), null)
 
             val selected = messageService.selectVariant(a.id, 0)
             assertEquals(0, selected.selectedVariant)
@@ -198,7 +199,7 @@ class MessageServiceTest {
             messageService.appendAssistant(storyId, "둘째 응답")
 
             assertThrows<BadRequestException> { messageService.selectVariant(old.id, 0) }
-            assertThrows<BadRequestException> { messageService.addVariant(old.id, "새 후보", null, null) }
+            assertThrows<BadRequestException> { messageService.addVariant(old.id, "새 후보", ResponseTags.NONE, null) }
         }
 
         @Test
@@ -224,8 +225,8 @@ class MessageServiceTest {
         @Test
         fun `ASSISTANT 메시지를 수정하면 선택된 후보 내용도 바뀐다`() {
             messageService.appendUser(storyId, "안녕")
-            val a = messageService.appendAssistant(storyId, "반갑소", emotion = "경계심")
-            messageService.addVariant(a.id, "누구시오", "의심", null)
+            val a = messageService.appendAssistant(storyId, "반갑소", ResponseTags(emotion = "경계심"))
+            messageService.addVariant(a.id, "누구시오", ResponseTags("의심"), null)
 
             val edited = messageService.edit(a.id, "누구시오, 낯선 이여")
             assertEquals("누구시오, 낯선 이여", edited.content)
@@ -260,7 +261,7 @@ class MessageServiceTest {
             messageService.appendAssistant(storyId, "응답1")
             val u2 = messageService.appendUser(storyId, "2")
             val a2 = messageService.appendAssistant(storyId, "응답2")
-            messageService.addVariant(a2.id, "응답2-b", null, null)
+            messageService.addVariant(a2.id, "응답2-b", ResponseTags.NONE, null)
             messageService.appendUser(storyId, "3")
             assertEquals(3, turnCount())
 
@@ -326,7 +327,7 @@ class MessageServiceTest {
         fun `list는 seq 순서의 MessageView를 돌려준다`() {
             messageService.appendAssistant(storyId, "프롤로그", kind = MessageKind.PROLOGUE)
             messageService.appendUser(storyId, "1")
-            messageService.appendAssistant(storyId, "응답1", emotion = "기쁨")
+            messageService.appendAssistant(storyId, "응답1", ResponseTags(emotion = "기쁨"))
 
             val views = messageService.list(storyId)
             assertEquals(listOf(0, 1, 2), views.map { it.seq })

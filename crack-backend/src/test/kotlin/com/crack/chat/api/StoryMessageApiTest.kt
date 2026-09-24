@@ -203,12 +203,12 @@ class StoryMessageApiTest {
         mockMvc.perform(get("/api/stories/999999/messages")).andExpect(status().isNotFound)
     }
 
-    // ---- 감정 태그 ----
+    // ---- 감정·인물 태그 (DESIGN.md §5.3) ----
 
     @Test
-    fun `감정 태그는 delta와 저장 본문 어디에도 없고 emotion 칼럼에만 저장된다`() {
+    fun `감정과 인물 태그는 delta와 저장 본문 어디에도 없고 칼럼에만 저장된다`() {
         // Fake는 3~5조각으로 나눈다. 태그가 길어서 첫 조각 경계에 걸려 여러 조각으로 쪼개진다.
-        val tag = "[감정: 경계심, 호기심, 두려움, 망설임, 그리움, 분노]"
+        val tag = "[감정: 경계심, 호기심, 두려움, 망설임, 그리움, 분노] [인물: 설월/당황]"
         val body = "*그녀는 한참을 말없이 창밖을 보았다.*\n\"...늦었네.\""
         respondWith("$tag\n\n$body")
 
@@ -216,25 +216,58 @@ class StoryMessageApiTest {
 
         val deltas = events.filter { it.name == "delta" }
         assertThat(deltas.size).isGreaterThan(1)
-        assertThat(deltas).noneMatch { it.data.contains("감정") || it.data.contains("[") }
+        assertThat(deltas).noneMatch { it.data.contains("감정") || it.data.contains("인물") || it.data.contains("[") }
         assertThat(events.deltaText()).isEqualTo(body)
 
         val done = events.done()
         assertThat(done["content"].asText()).isEqualTo(body)
-        assertThat(done.has("emotion")).isFalse()
+        assertThat(done["speaker"].asText()).isEqualTo("설월")
+        assertThat(done["speakerVariant"].asText()).isEqualTo("당황")
 
         val assistant = messages().last()
         assertThat(assistant.content).isEqualTo(body)
         assertThat(assistant.emotion).isEqualTo("경계심, 호기심, 두려움, 망설임, 그리움, 분노")
-        assertThat(variantRepository.findByMessageIdAndVariantIndex(assistant.id, 0)!!.emotion)
-            .isEqualTo(assistant.emotion)
+        assertThat(assistant.speaker).isEqualTo("설월")
+        assertThat(assistant.speakerVariant).isEqualTo("당황")
+        val variant = variantRepository.findByMessageIdAndVariantIndex(assistant.id, 0)!!
+        assertThat(variant.emotion).isEqualTo(assistant.emotion)
+        assertThat(variant.speaker).isEqualTo("설월")
+        assertThat(variant.speakerVariant).isEqualTo("당황")
 
+        // 목록 응답에 태그 원문(`[감정: …]`)은 없다. 값은 내부 신호 필드로만 나간다(§5.2)
         val listJson = mockMvc.perform(get(base())).andReturn().response.getContentAsString(Charsets.UTF_8)
-        assertThat(listJson).doesNotContain("emotion").doesNotContain("[감정")
+        assertThat(listJson).doesNotContain("[감정").doesNotContain("[인물")
 
         // 다음 요청의 대화 기록에도 태그가 없다
         send("다음")
-        assertThat(requests.last().messages).noneMatch { it.content.contains("[감정") }
+        assertThat(requests.last().messages).noneMatch { it.content.contains("[감정") || it.content.contains("[인물") }
+    }
+
+    @Test
+    fun `재생성 후보마다 인물 태그를 따로 저장한다`() {
+        respondWith("[인물: 설월/미소]\n첫 응답")
+        send("문을 연다")
+        val first = messages().last()
+
+        respondWith("[인물: 무극/분노]\n둘째 응답")
+        val events = sse(regenReq())
+
+        assertThat(events.deltaText()).isEqualTo("둘째 응답")
+        val reloaded = messages().last()
+        assertThat(reloaded.id).isEqualTo(first.id)
+        assertThat(reloaded.speaker).isEqualTo("무극")
+        assertThat(reloaded.speakerVariant).isEqualTo("분노")
+        assertThat(variantRepository.findByMessageIdAndVariantIndex(reloaded.id, 0)!!.speaker).isEqualTo("설월")
+        assertThat(variantRepository.findByMessageIdAndVariantIndex(reloaded.id, 1)!!.speaker).isEqualTo("무극")
+
+        // 0번 후보로 되돌리면 메시지의 태그도 함께 돌아간다
+        mockMvc.perform(
+            put("${base()}/${reloaded.id}/variant").contentType(MediaType.APPLICATION_JSON)
+                .content(json(mapOf("index" to 0)))
+        ).andExpect(status().isOk)
+        val back = messages().last()
+        assertThat(back.speaker).isEqualTo("설월")
+        assertThat(back.speakerVariant).isEqualTo("미소")
     }
 
     @Test

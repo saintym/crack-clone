@@ -1,6 +1,7 @@
 package com.crack.message
 
 import com.crack.global.exception.NotFoundException
+import com.crack.message.dto.ResponseTags
 import com.crack.message.entity.MessageKind
 import com.crack.message.service.MessageExporter
 import com.crack.message.service.MessageService
@@ -29,8 +30,8 @@ class MessageExporterTest {
         val storyId = storyRepository.createTestStory("눈 내리는 밤").id
         messageService.appendAssistant(storyId, "눈이 내린다.", kind = MessageKind.PROLOGUE)
         messageService.appendUser(storyId, "문을 연다")
-        val a = messageService.appendAssistant(storyId, "설월이 서 있다.\n\n\"누구요?\"\n", emotion = "경계심")
-        messageService.addVariant(a.id, "아무도 없다.", "허탈", null)
+        val a = messageService.appendAssistant(storyId, "설월이 서 있다.\n\n\"누구요?\"\n", ResponseTags(emotion = "경계심"))
+        messageService.addVariant(a.id, "아무도 없다.", ResponseTags("허탈"), null)
 
         val md = messageExporter.export(storyId)
 

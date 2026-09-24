@@ -3,6 +3,7 @@ package com.crack.message.service
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
 import com.crack.message.dto.MessageView
+import com.crack.message.dto.ResponseTags
 import com.crack.message.dto.TruncateResult
 import com.crack.message.entity.MessageKind
 import com.crack.message.entity.MessageRole
@@ -84,7 +85,7 @@ class MessageService(
     fun appendAssistant(
         storyId: Long,
         content: String,
-        emotion: String? = null,
+        tags: ResponseTags = ResponseTags.NONE,
         kind: MessageKind = MessageKind.NORMAL,
         turnNo: Int? = null,
     ): StoryMessage {
@@ -112,12 +113,21 @@ class MessageService(
                 role = MessageRole.ASSISTANT,
                 kind = kind,
                 content = content,
-                emotion = emotion,
+                emotion = tags.emotion,
+                speaker = tags.speaker,
+                speakerVariant = tags.speakerVariant,
                 selectedVariant = 0,
             )
         )
         variantRepository.save(
-            MessageVariant(messageId = message.id, variantIndex = 0, content = content, emotion = emotion)
+            MessageVariant(
+                messageId = message.id,
+                variantIndex = 0,
+                content = content,
+                emotion = tags.emotion,
+                speaker = tags.speaker,
+                speakerVariant = tags.speakerVariant,
+            )
         )
         updateTurnCount(story, maxOf(maxTurn, resolvedTurn))
         return message
@@ -125,7 +135,7 @@ class MessageService(
 
     /** 새 후보를 추가하고 선택한다. 가장 최근 ASSISTANT 메시지만 허용한다(D17). */
     @Transactional
-    fun addVariant(messageId: Long, content: String, emotion: String?, instruction: String?): StoryMessage {
+    fun addVariant(messageId: Long, content: String, tags: ResponseTags, instruction: String?): StoryMessage {
         val message = lockAndGetMessage(messageId)
         requireLatestAssistant(message)
         val nextIndex = (variantRepository.findMaxVariantIndex(message.id) ?: -1) + 1
@@ -134,17 +144,21 @@ class MessageService(
                 messageId = message.id,
                 variantIndex = nextIndex,
                 content = content,
-                emotion = emotion,
+                emotion = tags.emotion,
+                speaker = tags.speaker,
+                speakerVariant = tags.speakerVariant,
                 instruction = instruction,
             )
         )
         message.selectedVariant = nextIndex
         message.content = content
-        message.emotion = emotion
+        message.emotion = tags.emotion
+        message.speaker = tags.speaker
+        message.speakerVariant = tags.speakerVariant
         return messageRepository.save(message)
     }
 
-    /** 후보를 선택하고 메시지의 content·emotion을 그 후보로 동기화한다. 가장 최근 ASSISTANT만 허용한다. */
+    /** 후보를 선택하고 메시지의 content와 태그를 그 후보로 동기화한다. 가장 최근 ASSISTANT만 허용한다. */
     @Transactional
     fun selectVariant(messageId: Long, index: Int): StoryMessage {
         val message = lockAndGetMessage(messageId)
@@ -154,6 +168,8 @@ class MessageService(
         message.selectedVariant = index
         message.content = variant.content
         message.emotion = variant.emotion
+        message.speaker = variant.speaker
+        message.speakerVariant = variant.speakerVariant
         return messageRepository.save(message)
     }
 

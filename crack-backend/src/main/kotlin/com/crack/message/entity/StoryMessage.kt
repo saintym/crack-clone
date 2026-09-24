@@ -35,9 +35,17 @@ class StoryMessage(
     @Column(nullable = false, columnDefinition = "TEXT")
     var content: String,
 
-    /** ASSISTANT만. 선택된 후보의 감정 값 사본. 화면에 노출하지 않는다(DESIGN.md §5.3). */
+    /** ASSISTANT만. 선택된 후보의 감정 값 사본. 화면에 글로 노출하지 않는다(DESIGN.md §5.3). */
     @Column(length = 100)
     var emotion: String? = null,
+
+    /** ASSISTANT만. 선택된 후보의 중심 인물 이름 사본. 인물 이미지 선택에만 쓴다(DESIGN.md §5.3, §8.5). */
+    @Column(length = 100)
+    var speaker: String? = null,
+
+    /** ASSISTANT만. 인물 이미지 변형 이름(`{speaker}_{speakerVariant}`). 없으면 `기본`으로 폴백한다. */
+    @Column(name = "speaker_variant", length = 50)
+    var speakerVariant: String? = null,
 
     /** ASSISTANT만. 0부터. */
     @Column(name = "selected_variant")
