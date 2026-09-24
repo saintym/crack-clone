@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { documentApi, type CharacterInfo, type ScenarioDocumentType } from '../api/documents';
 import MobileLayout from '../components/layout/MobileLayout';
 import ImageCatalogList from '../components/scenario/ImageCatalogList';
+import ImageCatalogEditor from '../components/scenario/ImageCatalogEditor';
 
 type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist' | 'images' | 'keywords' | 'commands';
 
@@ -65,6 +66,8 @@ export default function ScenarioDetailPage() {
       loadCharacters();
     } else {
       loadDocument(tab);
+      // 이미지 탭의 인물별 편집기가 인물 목록을 쓴다 (DESIGN.md §8.5)
+      if (tab === 'images') loadCharacters();
     }
   }, [tab, scenarioName, loadCharacters, loadDocument]);
 
@@ -94,6 +97,15 @@ export default function ScenarioDetailPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  /** 인물별 편집기가 고친 `images.md` 저장 (DESIGN.md §8.5) */
+  const saveImages = (next: string): Promise<boolean> => {
+    if (!scenarioName) return Promise.resolve(false);
+    return documentApi
+      .update(scenarioName, 'images', next)
+      .then(() => { setContent(next); return true; })
+      .catch((err) => { console.error('Save failed:', err); return false; });
   };
 
   const handleCreateChar = async () => {
@@ -232,8 +244,9 @@ export default function ScenarioDetailPage() {
 
             {tab === 'images' && (
               <p className="text-xs text-text-muted mb-3 leading-relaxed">
-                한 줄에 하나씩 <code className="font-mono">- 태그: 주소 | 설명</code> 형식으로 적습니다. 주소는 http/https만 쓸 수 있고,
-                AI에게는 태그와 설명만 보냅니다. 장면에 맞으면 AI가 태그를 골라 채팅에 이미지로 보여 줍니다.
+                이미지를 다른 곳(예: imgur, 개인 스토리지)에 올리고 <strong>주소만</strong> 붙여 넣습니다(http/https).
+                인물마다 <code className="font-mono">기본</code> 이미지를 넣으면 그 인물이 나오는 턴에 자동으로 표시되고,
+                표정을 더하면 AI가 장면에 맞는 것을 고릅니다. AI에게는 태그와 설명만 보냅니다.
                 진행 중인 스토리에도 바로 반영됩니다.
               </p>
             )}
@@ -286,18 +299,16 @@ export default function ScenarioDetailPage() {
               </>
             ) : tab === 'images' ? (
               <>
-                {content.trim() ? (
-                  <ImageCatalogList text={content} />
-                ) : (
-                  <div className="p-5 bg-surface border border-border/40 rounded-2xl text-sm text-text-muted italic">
-                    (등록된 이미지 없음)
-                  </div>
-                )}
+                <ImageCatalogEditor
+                  characters={characters.map((c) => c.name)}
+                  text={content}
+                  onSave={saveImages}
+                />
                 <button
                   onClick={() => { setEditContent(content); setEditing(true); }}
-                  className="mt-4 py-3.5 bg-accent hover:bg-accent-hover text-white rounded-2xl text-[15px] font-semibold transition-all"
+                  className="mt-4 mb-6 py-3 bg-surface hover:bg-surface-hover text-text-secondary rounded-2xl text-[14px] font-medium transition-all"
                 >
-                  편집
+                  마크다운으로 직접 편집
                 </button>
               </>
             ) : (

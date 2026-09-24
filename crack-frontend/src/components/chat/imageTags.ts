@@ -1,5 +1,5 @@
 import { createContext } from 'react';
-import type { ImageEntry } from '../../api/images';
+import { DEFAULT_VARIANT, type ImageEntry } from '../../api/images';
 
 /** 태그 → 항목. null이면 아직 받지 못했다(이미지 줄을 숨긴다) */
 export type ImageCatalog = ReadonlyMap<string, ImageEntry> | null;
@@ -8,9 +8,6 @@ export type ImageCatalog = ReadonlyMap<string, ImageEntry> | null;
 export const ImageCatalogContext = createContext<ImageCatalog>(null);
 
 export type BubbleSegment = { type: 'text'; text: string } | { type: 'image'; tag: string };
-
-/** 변형을 적지 않았을 때 쓰는 기본 이미지 이름 (DESIGN.md §8.5) */
-export const DEFAULT_VARIANT = '기본';
 
 /**
  * 인물 이미지 자동 선택 (DESIGN.md §8.5, D31).
