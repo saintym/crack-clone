@@ -9,6 +9,26 @@ export const ImageCatalogContext = createContext<ImageCatalog>(null);
 
 export type BubbleSegment = { type: 'text'; text: string } | { type: 'image'; tag: string };
 
+/** 변형을 적지 않았을 때 쓰는 기본 이미지 이름 (DESIGN.md §8.5) */
+export const DEFAULT_VARIANT = '기본';
+
+/**
+ * 인물 이미지 자동 선택 (DESIGN.md §8.5, D31).
+ * `{speaker}_{speakerVariant}` → `{speaker}_기본` 순으로 찾고, 없으면 null(표시하지 않는다).
+ * AI가 목록에 없는 변형을 골라도 기본 이미지가 받아 준다.
+ */
+export function resolveCharacterImage(
+  catalog: ImageCatalog,
+  speaker: string | null | undefined,
+  speakerVariant: string | null | undefined,
+): ImageEntry | null {
+  if (!catalog || !speaker) return null;
+  const variant = speakerVariant?.trim();
+  return (variant ? catalog.get(`${speaker}_${variant}`) : undefined)
+    ?? catalog.get(`${speaker}_${DEFAULT_VARIANT}`)
+    ?? null;
+}
+
 /** 한 줄에 단독으로 있는 `{{img:태그}}` */
 const TAG_LINE = /^\s*\{\{\s*img\s*:\s*([^\s:{}|]+)\s*\}\}\s*$/;
 /** 문장 속에 섞인 태그. 이미지로 바꾸지 않고 지운다 */
