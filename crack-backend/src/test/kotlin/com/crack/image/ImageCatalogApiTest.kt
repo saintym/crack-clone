@@ -85,13 +85,20 @@ class ImageCatalogApiTest {
 
     @Test
     fun `프롬프트 미리보기에 IMAGES 섹션이 들어간다`() {
-        writeCatalog("- 설월_미소: https://example.com/a.webp | 설월이 옅게 웃는 모습")
+        // 인물 이미지(`설월_…`)는 장면 태그 목록에 넣지 않는다. 활성 인물의 변형 목록으로만 나간다(§8.5)
+        writeCatalog(
+            """
+            - 객잔_밤: https://example.com/a.webp | 비 내리는 밤의 객잔
+            - 설월_미소: https://example.com/b.webp | 설월이 옅게 웃는 모습
+            """.trimIndent()
+        )
 
         val sections = getJson("/api/stories/$storyId/prompt-preview")["sections"]
         val images = sections.single { it["name"].asText() == "images" }
 
         assertThat(images["slot"].asText()).isEqualTo("IMAGES")
-        assertThat(images["content"].asText()).contains("{{img:태그}}", "- 설월_미소: 설월이 옅게 웃는 모습")
+        assertThat(images["content"].asText()).contains("{{img:태그}}", "- 객잔_밤: 비 내리는 밤의 객잔")
+        assertThat(images["content"].asText()).doesNotContain("- 설월_미소")
         assertThat(images["content"].asText()).doesNotContain("https://example.com")
         // 시스템 프롬프트의 마지막 섹션이다(USER_NOTE 뒤)
         assertThat(sections.last { it["slot"].asText() != "BOTTOM" }["name"].asText()).isEqualTo("images")
