@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   DEFAULT_VARIANT, characterTag, isSafeImageUrl, isValidImageTag, parseImageCatalog,
   removeImageEntry, upsertImageEntry, type ImageEntry,
@@ -163,7 +163,7 @@ function AddForm({ label, placeholder, busy, validate, onAdd }: {
 interface EditorProps {
   /** 시나리오의 인물 이름 (`characters/{이름}.md`) */
   characters: string[];
-  /** `images.md` 원문 */
+  /** 서버에서 읽은 `images.md` 원문 */
   text: string;
   /** 바뀐 원문을 저장한다. 성공하면 true */
   onSave: (next: string) => Promise<boolean>;
@@ -182,14 +182,29 @@ export default function ImageCatalogEditor({ characters, text, onSave }: EditorP
   /** 아직 주소를 넣지 않아 파일에는 없는 줄 */
   const [pending, setPending] = useState<string[]>([]);
 
-  const { entries, rejected } = parseImageCatalog(text);
+  // 저장한 결과를 바로 화면에 반영한다. 서버에서 새로 읽어 오면(탭 이동 등) 그 값으로 맞춘다.
+  // https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  const [loaded, setLoaded] = useState(text);
+  const [current, setCurrent] = useState(text);
+  if (loaded !== text) {
+    setLoaded(text);
+    setCurrent(text);
+  }
+  /** 저장 요청을 보낸 순서대로 처리한다(뒤늦은 응답이 앞선 것을 덮지 않게) */
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+
+  const { entries, rejected } = parseImageCatalog(current);
   const byTag = new Map(entries.map((e) => [e.tag, e]));
   const isCharacterTag = (tag: string) => characters.some((name) => tag.startsWith(`${name}_`));
 
-  const apply = (tag: string, next: string) => {
+  const apply = (tag: string, transform: (text: string) => string) => {
+    // 입력은 이벤트마다 따로 처리되므로 `current`는 항상 마지막으로 저장한 내용이다
+    const next = transform(current);
+    setCurrent(next);
     setBusyTag(tag);
     setError(null);
-    onSave(next)
+    queue.current = queue.current
+      .then(() => onSave(next))
       .then((ok) => {
         if (!ok) setError('저장하지 못했습니다. 잠시 뒤 다시 시도하세요.');
         else setPending((p) => p.filter((t) => t !== tag));
@@ -198,10 +213,10 @@ export default function ImageCatalogEditor({ characters, text, onSave }: EditorP
   };
 
   const save = (tag: string, url: string, description: string) =>
-    apply(tag, upsertImageEntry(text, tag, url, description));
+    apply(tag, (t) => upsertImageEntry(t, tag, url, description));
 
   const remove = (tag: string) => {
-    if (byTag.has(tag)) apply(tag, removeImageEntry(text, tag));
+    if (byTag.has(tag)) apply(tag, (t) => removeImageEntry(t, tag));
     setPending((p) => p.filter((t) => t !== tag));
   };
 
