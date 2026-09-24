@@ -7,7 +7,8 @@ export type MessageRole = 'USER' | 'ASSISTANT';
 export type MessageKind = 'NORMAL' | 'PROLOGUE' | 'CONTINUATION' | 'COMMAND';
 
 /**
- * 화면용 메시지 (`MessageView`, DESIGN.md §5.2). 감정 값은 서버가 넣지 않는다(§5.3).
+ * 화면용 메시지 (`MessageView`, DESIGN.md §5.2).
+ * `emotion`·`speaker`·`speakerVariant`는 화면에 글로 출력하지 않는 내부 신호다(§5.3).
  * 서버가 필드를 더 보내도 쓰지 않을 뿐 문제가 되지 않는다.
  */
 export interface Message {
@@ -17,6 +18,12 @@ export interface Message {
   role: MessageRole;
   kind: MessageKind;
   content: string;
+  /** ASSISTANT만. 첫 줄 `[감정: …]` 값. 화면에 글로 출력하지 않는다 */
+  emotion: string | null;
+  /** ASSISTANT만. 첫 줄 `[인물: …]`의 인물 이름. 인물 이미지 선택에 쓴다(§8.5) */
+  speaker: string | null;
+  /** ASSISTANT만. 인물 이미지 변형 이름. 없으면 `기본`으로 폴백한다 */
+  speakerVariant: string | null;
   /** ASSISTANT만. 선택된 후보 번호(0부터). USER는 null */
   variantIndex: number | null;
   /** ASSISTANT만 의미가 있다. USER는 0 */

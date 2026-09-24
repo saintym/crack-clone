@@ -1,6 +1,7 @@
 package com.crack.story
 
 import com.crack.global.config.DataPaths
+import com.crack.message.dto.ResponseTags
 import com.crack.message.entity.MessageKind
 import com.crack.message.repository.MessageVariantRepository
 import com.crack.message.repository.StoryMessageRepository
@@ -69,8 +70,8 @@ class StoryBranchTest {
         source = storyRepository.save(Story(scenarioId = scenario.id, title = "원본", dirName = "1700000000000"))
 
         ids += messageService.appendUser(source.id, "U1").id
-        val a1 = messageService.appendAssistant(source.id, "A1", "기쁨")
-        messageService.addVariant(a1.id, "A1-두번째", "놀람", "더 짧게")
+        val a1 = messageService.appendAssistant(source.id, "A1", ResponseTags("기쁨", "설월", "미소"))
+        messageService.addVariant(a1.id, "A1-두번째", ResponseTags("놀람"), "더 짧게")
         ids += a1.id
         ids += messageService.appendUser(source.id, "U2").id
         messageService.edit(ids[2], "U2-수정")

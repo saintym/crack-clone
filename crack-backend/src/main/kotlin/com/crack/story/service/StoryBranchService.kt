@@ -102,6 +102,8 @@ class StoryBranchService(
                     kind = m.kind,
                     content = m.content,
                     emotion = m.emotion,
+                    speaker = m.speaker,
+                    speakerVariant = m.speakerVariant,
                     selectedVariant = m.selectedVariant,
                     editedAt = m.editedAt,
                     createdAt = m.createdAt,
@@ -114,6 +116,8 @@ class StoryBranchService(
                         variantIndex = v.variantIndex,
                         content = v.content,
                         emotion = v.emotion,
+                        speaker = v.speaker,
+                        speakerVariant = v.speakerVariant,
                         instruction = v.instruction,
                         createdAt = v.createdAt,
                     )

@@ -1,6 +1,7 @@
 package com.crack.chat.flow
 
 import com.crack.message.dto.MessageView
+import com.crack.message.dto.ResponseTags
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
@@ -17,7 +18,7 @@ class GenerationStreamListener(
     private val storyId: Long,
     private val emitter: SseEmitter,
     private val ticket: StoryGenerationLock.Ticket,
-    private val save: (body: String, emotion: String?) -> MessageView,
+    private val save: (body: String, tags: ResponseTags) -> MessageView,
     private val afterSave: (MessageView) -> Unit,
 ) : TaggedResponseListener {
 
@@ -28,14 +29,14 @@ class GenerationStreamListener(
         send(SseEvents.DELTA, text, null)
     }
 
-    override fun onComplete(body: String, emotion: String?) {
+    override fun onComplete(body: String, tags: ResponseTags) {
         try {
             if (body.isBlank()) {
                 log.warn("빈 AI 응답 — 저장하지 않음: storyId=$storyId")
                 send(SseEvents.ERROR, EMPTY_RESPONSE_MESSAGE, null)
                 return
             }
-            val saved = save(body, emotion)
+            val saved = save(body, tags)
             ticket.release() // done을 받은 클라이언트가 바로 다음 요청을 보내도 409가 나지 않게 먼저 푼다
             afterSave(saved)
             send(SseEvents.DONE, saved, MediaType.APPLICATION_JSON)

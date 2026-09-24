@@ -1,5 +1,6 @@
 package com.crack.story.prologue
 
+import com.crack.chat.flow.EmotionTagFilter
 import com.crack.message.entity.MessageKind
 import com.crack.message.entity.StoryMessage
 import com.crack.message.service.MessageService
@@ -14,6 +15,9 @@ import java.nio.file.Path
  *
  * 프롤로그는 `turn_no = 0`, `seq = 0`, `kind = PROLOGUE`, `role = ASSISTANT`다(DESIGN.md §3 턴 규칙).
  * 턴 수(`stories.turn_count`)는 0 그대로다.
+ *
+ * 사람이 쓴 첫 메시지에도 AI 응답과 같은 첫 줄 태그 규칙을 적용한다(DESIGN.md §5.3).
+ * `[인물: 설월/미소]`를 맨 앞에 적어 두면 인물 이미지가 붙고, 태그 자체는 본문에서 빠진다.
  */
 @Service
 class PrologueService(
@@ -36,6 +40,17 @@ class PrologueService(
             null
         } ?: return null
 
-        return messageService.appendAssistant(storyId, content, kind = MessageKind.PROLOGUE, turnNo = 0)
+        val parsed = EmotionTagFilter.parse(content)
+        if (parsed.body.isBlank()) {
+            log.warn("첫 메시지가 태그뿐이라 건너뛴다. storyId={}, dir={}", storyId, storyDir)
+            return null
+        }
+        return messageService.appendAssistant(
+            storyId,
+            parsed.body,
+            parsed.tags,
+            kind = MessageKind.PROLOGUE,
+            turnNo = 0,
+        )
     }
 }

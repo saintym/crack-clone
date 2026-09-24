@@ -58,6 +58,7 @@
 | V5 | T03 | `story_messages`, `message_variants` 생성 |
 | V6 | T12 | 사용하지 않는 테이블 삭제: `chat_messages`, `story_summaries`, `character_events`, `character_states`, `scenario_settings` |
 | V7 | T14 | `memory_records` 생성 · `stories.recorded_through_turn` 추가 |
+| V8 | T27 | `story_messages`·`message_variants`에 `speaker`, `speaker_variant` 추가 (§5.3 인물 태그) |
 
 테스트는 H2(`ddl-auto: create-drop`, Flyway 꺼짐)로 돈다. 엔티티와 SQL이 둘 다 맞아야 한다. SQL은 PostgreSQL 문법으로 쓴다.
 
@@ -107,6 +108,10 @@ CREATE TABLE memory_records (
 );
 CREATE INDEX idx_memory_records_story ON memory_records(story_id, id);
 ALTER TABLE stories ADD COLUMN recorded_through_turn INT NOT NULL DEFAULT 0;
+
+-- V8 (§5.3 인물 태그). ASSISTANT만 값이 있고, 후보마다 따로 저장한다
+ALTER TABLE story_messages   ADD COLUMN speaker VARCHAR(100), ADD COLUMN speaker_variant VARCHAR(50);
+ALTER TABLE message_variants ADD COLUMN speaker VARCHAR(100), ADD COLUMN speaker_variant VARCHAR(50);
 ```
 
 ### 턴 규칙
@@ -200,7 +205,8 @@ class MessageService {
 | DELETE | `/messages/{id}` | 이 메시지부터 끝까지 삭제. 응답 `{storyId, minTruncatedTurn, deletedCount, turnCount}` |
 | GET | `/messages/export` | 마크다운 내보내기 (`text/markdown`) |
 
-`MessageView = {id, seq, turn, role, kind, content, variantIndex, variantCount, edited, createdAt}`. `emotion`은 **넣지 않는다**(§5.3).
+`MessageView = {id, seq, turn, role, kind, content, emotion, speaker, speakerVariant, variantIndex, variantCount, edited, createdAt}`.
+`emotion`·`speaker`·`speakerVariant`는 화면에 **글로 출력하지 않는** 내부 신호다(§5.3). 프론트는 `speaker`로 인물 이미지를 고를 때만 쓴다(T27에서 추가. 그전에는 `emotion`을 내보내지 않았다).
 
 **SSE 이벤트:** `user`(저장된 유저 MessageView JSON), `delta`(텍스트), `done`(저장된 ASSISTANT MessageView JSON), `error`(메시지)
 
@@ -212,15 +218,26 @@ class MessageService {
 - 기존 `/chat/*` 경로는 T11이 프론트를 옮긴 뒤 T12에서 삭제한다. T07은 새 경로만 추가하고 기존 경로는 그대로 둔다.
 - **재생성은 가장 최근 ASSISTANT 메시지만** 대상으로 한다(D17). 과거 메시지 재생성 요청은 400을 돌려준다.
 
-### 5.3 감정 태그 (D19)
-AI는 응답 첫 줄에 `[감정: 경계심, 호기심]`을 쓴다. 이 태그는 출력 품질과 이미지 선택(T20)을 돕는 **내부 신호**다. **사용자에게는 절대 보이지 않는다.**
-- **스트림 필터 `EmotionTagFilter`(T07):**
-  - 응답 시작부를 첫 줄바꿈까지(최대 200자) 버퍼링한다.
-  - `^\[\s*감정\s*:\s*(.+?)\]\s*$` 형식에 맞으면 태그를 떼어 내고 감정 값만 기록한다. 맞지 않으면 버퍼를 그대로 흘린다.
-  - 그래서 `delta` 이벤트에 태그가 절대 실리지 않는다.
-- **저장:** `content`에는 태그를 뺀 본문을 넣고, `emotion` 칼럼에 감정 값을 넣는다.
+### 5.3 감정 태그와 인물 태그 (D19, D31)
+AI는 응답 **첫 줄**에 태그 줄을 쓴다. 감정 태그와 인물 태그를 한 줄에 함께 쓸 수 있다.
+
+```
+[감정: 경계심, 호기심] [인물: 설월/당황]
+```
+
+- `[감정: …]`은 출력 품질과 이미지 선택을 돕는 내부 신호다. 값은 자유롭게 쓴다.
+- `[인물: 이름/변형]`은 이 응답의 **중심 인물**이다(한 명만). 변형은 생략할 수 있고(`[인물: 설월]` → `설월_기본`),
+  인물이 없거나 주인공만 나오면 태그 자체를 생략한다. **변형은 프롬프트(IMAGES 슬롯)가 준 목록 안에서 고른다**(§8.5).
+- **두 태그 모두 사용자에게는 절대 보이지 않는다.** delta에도 저장 본문에도 남지 않는다.
+
+- **스트림 필터 `EmotionTagFilter`(T07, T27 확장):**
+  - 응답 시작부를 버퍼링한다. 줄바꿈까지, 한 줄 최대 [200]자, **앞쪽 태그 줄 최대 2줄**까지 본다.
+  - 한 줄이 `[감정: …]`·`[인물: …]` 태그만으로 이루어져 있으면 그 줄을 버리고 값만 기록한다. 태그 뒤에 본문이 섞인 줄은 태그 줄이 아니다.
+  - 태그 줄이 아니라고 판단하면 버퍼를 그대로 흘린다. 그래서 `delta`에 태그가 절대 실리지 않는다.
+- **저장:** `content`에는 태그를 뺀 본문, `emotion`·`speaker`·`speaker_variant` 칼럼에 값을 넣는다. **후보마다 따로 저장한다.**
+- **프롤로그:** 사람이 쓴 `prologue.md`도 같은 규칙으로 파싱한다(첫 줄에 태그를 적으면 인물 이미지가 붙는다).
 - **AI 입력:** 대화 기록으로 넘기는 과거 응답은 태그가 빠진 `content`다(토큰 절약). 태그 출력 규칙은 시스템 프롬프트(BASE)가 매번 요구한다.
-- **프론트:** 받은 내용을 그대로 렌더링한다. 방어용으로, 첫 줄이 감정 태그면 숨기는 처리를 한 번 더 둔다(T11).
+- **프론트:** 받은 내용을 그대로 렌더링한다. 방어용으로, 첫 줄이 태그 줄이면 숨기는 처리를 한 번 더 둔다(T11, T27). 인물 이미지 선택은 §8.5.
 
 ## 6. 프롬프트 조립 (T08 격리, T13 v2)
 
@@ -259,7 +276,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 
   | slot | order | name | 내용 |
   |---|---|---|---|
-  | BASE | 0 | `base` | 기본 규칙 + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그 §5.3) |
+  | BASE | 0 | `base` | 기본 규칙 + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그·인물 태그 §5.3) |
   | WORLD | 0 | `world` | `world.md` |
   | SCENARIO | 0 | `scenario` | `scenario.md` |
   | SCENARIO | 100 | `chronicle` | `chronicle.md`의 `## 장 요약` + 최근 회차 원문. 최신 회차부터 거꾸로 `crack.memory.budget.chronicle` 안에서 담고(가장 최근 회차 하나는 넘어도 넣는다), 파일 순서(오래된 것부터)로 쓴다 |
@@ -518,14 +535,30 @@ class KeywordMatcher {
 - 부분 문자열 매칭을 쓴다. 한국어 조사 때문이다("설월이"도 "설월"에 매칭).
 - 2글자 미만 키는 무시하고, 대소문자는 구분하지 않는다.
 
-### 8.5 이미지 카탈로그 (T20)
+### 8.5 이미지 카탈로그 (T20, T27)
 - **`images.md`**(시나리오 원본, 스토리에서 참조): `- 설월_미소: https://…/a.webp | 설월이 옅게 웃는 모습`
-- **프롬프트:** IMAGES 슬롯에 태그 목록과 설명을 넣고, "장면에 맞으면 `{{img:태그}}`를 한 줄에 단독으로" 쓰라고 지시한다.
-- **프론트:** `GET /api/stories/{id}/images`로 카탈로그를 받아 `{{img:태그}}`를 `<img>`로 바꾼다. 모르는 태그는 숨긴다.
-- **형식 세부(T20 확정):** `- `(또는 `* `)로 시작하는 줄만 읽고 나머지 줄(제목, 빈 줄, 안내문)과 HTML 주석 안은 무시한다. 태그는 첫 `:` 앞이고 공백·`:`·`{`·`}`·`|`를 쓸 수 없다. URL은 첫 `|` 앞, 설명은 그 뒤(선택). URL이 `http`/`https`가 아니면 그 줄을 버린다. 같은 태그는 위에 있는 것이 우선한다.
+- **인물 이미지 태그 규칙(T27, D31):** `{인물}_{변형}`. 인물 이름은 `characters/{이름}.md`의 파일명과 같아야 하고, 변형은 자유 이름이다.
+  `{인물}_기본`은 그 인물의 기본 이미지다. 인물 이름이 아닌 태그(`객잔_밤` 등)는 장면·배경 이미지다.
 - **API 응답(T20 확정):** `GET /api/stories/{id}/images` → `[{tag, url, description}]`(파일 순서, `description`은 없으면 빈 문자열). `images.md`가 없으면 `[]`, 스토리가 없으면 404. 시나리오 원본 `images.md`는 기존 `/api/scenarios/{name}/documents/images`로 읽고 쓴다.
-- **프롬프트(T20 확정):** 기여자 `ImagesContributor`(IMAGES, order 0, name `images`). 태그와 설명만 넣고 URL은 넣지 않는다(토큰 절약). 최대 개수는 `crack.image.prompt-max-entries`(기본 50, 위에서부터). 첫 줄 감정 태그와 어울리는 이미지를 고르라고 안내한다.
-- **프론트 표시 규칙(T20 확정):** AI 말풍선에서만 바꾼다. 한 줄에 단독으로 있는 `{{img:태그}}`만 이미지로 바꾸고, 문장 속에 섞인 태그는 지운다. 스트리밍 중 아직 덜 들어온 마지막 줄의 태그는 보이지 않는다. 카탈로그를 받기 전이나 이미지를 불러오지 못하면 숨긴다.
+- **형식 세부(T20 확정):** `- `(또는 `* `)로 시작하는 줄만 읽고 나머지 줄(제목, 빈 줄, 안내문)과 HTML 주석 안은 무시한다. 태그는 첫 `:` 앞이고 공백·`:`·`{`·`}`·`|`를 쓸 수 없다. URL은 첫 `|` 앞, 설명은 그 뒤(선택). URL이 `http`/`https`가 아니면 그 줄을 버린다. 같은 태그는 위에 있는 것이 우선한다.
+
+**프롬프트 (`ImagesContributor`, IMAGES slot, order 0, name `images`)** — 태그와 설명만 넣고 URL은 넣지 않는다(토큰 절약). 최대 개수는 `crack.image.prompt-max-entries`(기본 50, 위에서부터). T27에서 두 부분으로 나눴다.
+1. **활성 인물 변형 목록**: 활성 인물(§6.2, `ActiveCharacterSelector`) 중 카탈로그에 항목이 있는 인물만, `설월 — 기본, 당황, 분노`처럼 쓸 수 있는 변형 이름을 준다.
+   응답 첫 줄 `[인물: 이름/변형]`(§5.3)의 변형은 **이 목록 안에서** 고른다. 활성 인물은 기억 기록 회차 동안 고정되므로(D30) 이 목록도 회차 안에서 바뀌지 않는다(캐시 접두사 유지).
+2. **장면·배경 태그 목록**: 인물 태그가 아닌 항목만. 지금처럼 "필요할 때만 `{{img:태그}}`를 한 줄에 단독으로" 안내한다. **인물 이미지는 이 목록에 넣지 않는다**(자동 선택이 맡는다).
+
+**프론트 표시 규칙**
+- **본문 태그(T20):** AI 말풍선에서만 바꾼다. 한 줄에 단독으로 있는 `{{img:태그}}`만 이미지로 바꾸고, 문장 속에 섞인 태그는 지운다. 스트리밍 중 아직 덜 들어온 마지막 줄의 태그는 보이지 않는다. 카탈로그를 받기 전이나 이미지를 불러오지 못하면 숨긴다.
+- **인물 이미지 자동 선택(T27, D31):** 본문에 `{{img:…}}`를 끼워 넣지 않는다. **렌더 시** `MessageView.speaker`로 카탈로그에서 골라 말풍선 맨 위에 보여 준다.
+  - 순서: `{speaker}_{speakerVariant}` → `{speaker}_기본` → 없으면 표시하지 않는다(AI가 목록에 없는 변형을 골라도 폴백이 받는다).
+  - **본문에 `{{img:태그}}` 줄이 있으면 자동 선택을 하지 않는다**(의도적으로 넣은 장면 이미지가 우선).
+  - 프롤로그를 포함한 모든 AI 말풍선에 같은 규칙을 쓴다. 카탈로그를 나중에 고치면 과거 메시지에도 바로 반영된다.
+
+**등록 화면(시나리오 상세 → 이미지 탭, T27)** — `images.md` 형식은 그대로 두고 편집 방법만 늘렸다.
+- **인물별 편집기(기본)**: 시나리오의 인물 목록을 줄로 보여 주고, 각 인물의 `기본` 칸에 URL을 붙여 넣으면 `{인물}_기본` 항목이 생긴다. "변형 추가"로 `{인물}_{이름}`을 더한다(이름 자유 입력). 장면·배경 태그도 같은 방식으로 더한다.
+- **직접 편집**: 기존 마크다운 편집기와 미리보기를 그대로 남긴다.
+- 편집기는 `images.md` **텍스트를 줄 단위로 고친다.** 주석과 인식하지 못한 줄은 건드리지 않는다(있으면 그 줄을 바꾸고, 없으면 파일 끝에 붙이고, 지우면 그 줄만 지운다).
+- **업로드 기능은 만들지 않는다(D14).** 사용자가 앱 밖에 올리고 URL만 붙여 넣는다.
 
 ## 9. 스토리 문서 API (T08)
 

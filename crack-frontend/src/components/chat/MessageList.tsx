@@ -124,7 +124,12 @@ export default function MessageList({
                 </div>
               </div>
             ) : (
-              <ChatBubble role={msg.role} content={msg.content} />
+              <ChatBubble
+                role={msg.role}
+                content={msg.content}
+                speaker={msg.speaker}
+                speakerVariant={msg.speakerVariant}
+              />
             )}
 
             {!isEditing && (
