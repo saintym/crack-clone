@@ -2,10 +2,12 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { scenarioApi, type Scenario } from '../api/scenarios';
 import MobileLayout from '../components/layout/MobileLayout';
+import ScenarioImportSheet from '../components/scenario/ScenarioImportSheet';
 
 export default function ScenariosPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
@@ -52,14 +54,28 @@ export default function ScenariosPage() {
     <MobileLayout
       title="시나리오"
       rightAction={
-        <button
-          onClick={() => setShowCreate(true)}
-          className="w-9 h-9 flex items-center justify-center rounded-full bg-accent hover:bg-accent-hover text-white transition-all"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowImport(true)}
+            title="URL로 가져오기"
+            className="h-9 px-3 flex items-center gap-1.5 rounded-full bg-surface hover:bg-surface-hover text-text-secondary text-xs transition-all"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
+              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" />
+            </svg>
+            URL
+          </button>
+          <button
+            onClick={() => setShowCreate(true)}
+            title="새 시나리오"
+            className="w-9 h-9 flex items-center justify-center rounded-full bg-accent hover:bg-accent-hover text-white transition-all"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M12 5v14M5 12h14" />
+            </svg>
+          </button>
+        </div>
       }
     >
       <div className="h-full overflow-y-auto px-5 py-5 space-y-4">
@@ -78,6 +94,12 @@ export default function ScenariosPage() {
               className="mt-4 text-accent text-sm font-medium hover:text-accent-hover transition-colors"
             >
               새 시나리오 만들기
+            </button>
+            <button
+              onClick={() => setShowImport(true)}
+              className="mt-2 text-text-muted text-sm hover:text-text-secondary transition-colors"
+            >
+              URL로 가져오기
             </button>
           </div>
         ) : (
@@ -122,6 +144,13 @@ export default function ScenariosPage() {
           ))
         )}
       </div>
+
+      {showImport && (
+        <ScenarioImportSheet
+          onClose={() => { setShowImport(false); loadScenarios(); }}
+          onCreated={(done) => { setShowImport(false); navigate(`/scenario/${done.name}`); }}
+        />
+      )}
 
       {/* Create Modal */}
       {showCreate && (
