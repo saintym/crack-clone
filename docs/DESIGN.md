@@ -600,3 +600,93 @@ src/components/panels/…             T15 기억 패널, T18 지시 패널, T19 
 ```
 
 패널은 채팅 화면 오른쪽 드로어(모바일은 하단 시트)에 탭으로 모은다. **플레이 흐름을 가리는 모달은 쓰지 않는다** (D7).
+
+## 11. URL에서 시나리오 가져오기 (T28, D32)
+
+설정이 정리된 웹페이지 URL을 주면 LLM이 읽어 **시나리오 한 벌**을 만든다. 페이지마다 형식이 달라 규칙 파싱이 아니라 LLM이 우리 형식으로 옮긴다. 추출 단계에서만 토큰을 줄인다.
+
+패키지는 `com.crack.scenario.imports`다. `import`는 코틀린 예약어라 패키지 이름으로 쓸 수 없다(폴더도 `imports`).
+
+### 11.1 추출 (LLM 호출 전)
+
+`PageFetcher` → `HtmlExtractor` → `ExtractedPage`.
+
+- **SSRF 방어(`SsrfGuard`)**: `http`/`https`만 허용, 호스트를 DNS로 풀어 **모든 결과 IP**를 검사한다. 차단 대역: 루프백(127/8, `::1`), 사설(10/8, 172.16/12, 192.168/16, fc00::/7), 링크로컬(169.254/16, fe80::/10), 와일드카드(0.0.0.0, `::`), 멀티캐스트, `localhost`/`*.localhost`/`.local`/`.internal`, 사용자 정보(`user@host`)가 붙은 URL. **리다이렉트는 따라가지 않고 직접 처리하며 매 홉을 다시 검사한다**(최대 5홉).
+- 상한: 본문 **5MB**, 타임아웃 **20초**(연결·읽기 각각), `Content-Type`은 `text/html`/`application/xhtml+xml`만. 인코딩은 `charset` → `<meta charset>` → UTF-8 순.
+- `crack.import.allow-private-hosts=true`면 사설·루프백 검사를 끈다. **테스트 전용**이다.
+- **추출물 세 덩어리** (`ExtractedPage`)
+  - `bodyText`: `<script>`·`<style>`·주석을 지우고 태그를 없앤 뒤 공백을 정리한 본문
+  - `dataBlocks`: `<script>` 안의 **들여쓰기 없는** `const|let|var NAME = [...]`/`{...}` 리터럴을 **원문 텍스트로** 잘라 온 것. 괄호 짝을 세며 문자열·주석을 건너뛴다. `data:`(base64) 블록과 블록당 상한(기본 40,000자)을 넘는 꼬리는 버린다
+  - `imageUrls`: `src`/`srcset`/`href`와 데이터 블록 안의 이미지 URL. 문서 URL 기준 절대 URL로 정규화하고 중복을 없앤다. `data:`는 버린다
+- 합계 상한(기본 150,000자)을 넘으면 **데이터 블록을 먼저 남기고 본문을 앞에서부터 잘라 쓴다.** 무엇을 얼마나 잘랐는지 `truncated`(`{bodyChars, dataChars, droppedBodyChars, droppedBlocks}`)로 응답에 적는다.
+
+### 11.2 API
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/api/scenarios/import/analyze` | body `{url}` → 분석 결과 |
+| POST | `/api/scenarios/import/{jobId}/confirm` | body `{name, title?, answers}` → **SSE** 진행 상황 |
+
+**분석 응답**
+```json
+{ "jobId": "…", "url": "…", "suggestedName": "무림", "title": "무림 설정집",
+  "characters": [{"name": "휘령", "alias": "낙화검선", "org": "화산파 일대제자", "imageUrl": "https://…"}],
+  "imageCount": 28, "characterCount": 25,
+  "questions": [{"id": "q1", "text": "주인공의 이름은?", "placeholder": "예: 무명"}],
+  "truncated": {"bodyChars": 28034, "dataChars": 30112, "droppedBodyChars": 0, "droppedBlocks": 1},
+  "estimatedLlmCalls": 9, "estimatedSeconds": 270 }
+```
+- LLM 1회(purpose `CHAT`). 질문은 **페이지에 없는 것만** 3~5개(주인공 이름·성별·소속·시작 시점·목표 등).
+- `jobId`로 추출 결과와 분석 결과를 **서버 메모리에 캐시**(TTL 30분, `ImportJobStore`). DB 테이블은 만들지 않는다.
+- 없는/만료된 `jobId`는 404. 이미 있는 시나리오 이름은 confirm에서 400(덮어쓰기 금지).
+
+**생성 SSE 이벤트** (`step` / `done` / `error`)
+```
+event:step   data:{"step":"world","label":"세계관·시나리오·키워드북","index":1,"total":4,"percent":25}
+event:done   data:{"scenarioId":12,"name":"무림","title":"무림 설정집","files":["world.md","scenario.md",…],"characterCount":25,"llmCalls":9,"elapsedSeconds":212}
+event:error  data:생성 실패 문구 (어느 단계에서 실패했는지 포함)
+```
+단계는 `world` → `characters`(배치마다 `step` 한 번, `detail`에 진행한 인물 이름) → `protagonist` → `images`다.
+
+### 11.3 생성 파이프라인
+
+1. `world.md`, `scenario.md`, `keywords.md` — LLM 1회
+2. `characters/{이름}.md` — 페이지의 인물 전원. `crack.import.characters-per-batch`(기본 4)씩 묶고 `crack.import.concurrency`(기본 3)로 동시 실행
+3. `characters/protagonist.md`, `prologue.md` — 사용자 답변 반영, LLM 1회
+4. `images.md` — 인물 이미지 URL을 `{이름}_기본`으로 등록(T27 규칙). 인물과 맞지 않는 이미지는 `<!-- -->`로 감싸 장면 태그 후보로 남긴다. LLM 호출 없음
+
+- **모든 AI 호출은 `AiGateway`를 거친다.** 추출 컨텍스트는 시스템 프롬프트에 두고 단계별 지시만 유저 메시지로 보낸다(프롬프트 접두사를 같게 유지해 캐시를 살린다).
+- **원자적 생성**: `{data-path}/.import-tmp/{jobId}`에 다 만든 뒤 시나리오 폴더로 `ATOMIC_MOVE`하고 DB에 등록한다. 중간 실패나 DB 등록 실패면 임시 폴더(와 옮긴 폴더)를 지워 흔적을 남기지 않는다. 임시 폴더 이름이 `.`으로 시작하므로 시나리오로 잡히지 않는다.
+- **생성물은 우리 파서와 호환돼야 한다**(`ImportDocs`가 강제한다).
+  - 인물 문서: `- **이름**:` 필수, `- **별칭**: a, b`(있으면), `## 기억` 섹션을 **빈 상태로** 둔다(T05 `CharacterDoc`)
+  - 주인공 문서: `## 변화 기록` 빈 섹션(T05 `ProtagonistDoc`)
+  - `keywords.md`: `## 제목` + `키워드: a, b` + 내용(T06 `KeywordBookParser`)
+  - `images.md`: `- 태그: URL | 설명`(T20 `ImageCatalogParser`)
+  - 파일명은 인물 이름 그대로. **경로 조각 하나**여야 한다(`/`, `\`, `..`, 제어문자, 공백만 있는 이름 거부). 중복 이름은 뒤에 `-2`를 붙인다
+  - 모든 생성 문서 맨 아래에 출처 한 줄: `<!-- 출처: {url} (자동 생성 {날짜}) -->`
+
+### 11.4 설정
+
+```yaml
+crack:
+  import:
+    concurrency: 3              # 인물 배치 동시 실행 수
+    characters-per-batch: 4     # 한 번의 LLM 호출로 만드는 인물 수
+    max-bytes: 5242880          # 내려받기 상한 (5MB)
+    timeout-seconds: 20         # 연결·읽기 타임아웃
+    max-redirects: 5
+    max-context-chars: 150000   # 본문 + 데이터 블록 합계 상한
+    max-data-block-chars: 40000 # 데이터 블록 하나의 상한
+    job-ttl-minutes: 30         # 추출 결과 캐시 TTL
+    allow-private-hosts: false  # 테스트 전용. 켜면 SSRF 검사를 끈다
+```
+
+### 11.5 프론트
+
+`src/components/scenario/ScenarioImportSheet.tsx`(단계형 하단 시트) + `src/api/scenarioImport.ts`. 시나리오 목록 헤더의 **"URL로 가져오기"** 버튼으로 연다.
+1. URL 입력 → 분석 중
+2. 분석 결과(제목, 인물 수·목록, 이미지 수, 잘린 양)와 질문 입력 폼. 시나리오 이름·제목 수정 가능
+3. 생성 진행(SSE 단계 표시, 예상 시간 안내)
+4. 완료 → 시나리오 상세로 이동. "문서를 확인하고 다듬으세요" 안내
+
+실패하면 어느 단계에서 왜 실패했는지 보여 준다. 화면에 "남의 페이지는 개인 이용 범위에서 쓰세요" 한 줄 안내를 둔다.
