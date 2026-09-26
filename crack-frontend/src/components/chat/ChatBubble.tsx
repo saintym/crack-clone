@@ -63,10 +63,12 @@ function CatalogImage({ entry }: { entry: ImageEntry }) {
 
 /**
  * 메시지 말풍선. 마크다운을 렌더링하고, 방어용으로 앞쪽 감정·인물 태그를 숨긴다(§5.3).
- * AI 말풍선의 `{{img:태그}}` 줄은 카탈로그 이미지로 바꾼다(§8.5). 모르는 태그와 받기 전의 태그는 숨긴다.
+ * AI 말풍선의 `{{img:태그}}`는 나온 자리에서 카탈로그 이미지로 바꾼다(§8.5, D34).
+ * 인물 이미지는 그 인물이 말하는 자리 바로 앞에 오므로, 말풍선 안에서 대사와 얼굴이 함께 읽힌다.
+ * 모르는 태그와 받기 전의 태그는 숨긴다. 사이에 글 없이 같은 이미지가 이어지면 한 번만 보여 준다.
  *
- * 본문에 카탈로그에 있는 `{{img:…}}`가 없으면 `speaker`로 인물 이미지를 골라 맨 위에 보여 준다(§8.5, D31).
- * 본문에 직접 넣은 이미지가 있으면 그게 우선이라 자동 선택을 하지 않는다.
+ * 본문에 카탈로그에 있는 `{{img:…}}`가 하나도 없으면 폴백으로 `speaker`로 인물 이미지를 골라
+ * 맨 위에 보여 준다(§8.5, D31). AI가 본문 태그를 빠뜨린 턴과 옛 메시지를 위한 것이다.
  */
 export default function ChatBubble({ role, content, speaker, speakerVariant, isStreaming }: ChatBubbleProps) {
   const isUser = role === 'USER';
@@ -98,11 +100,20 @@ export default function ChatBubble({ role, content, speaker, speakerVariant, isS
             {segments === null ? (
               <Markdown text={displayContent} />
             ) : (
-              segments.map((segment, i) => {
-                if (segment.type === 'text') return <Markdown key={i} text={segment.text} />;
-                const entry = catalog?.get(segment.tag);
-                return entry ? <CatalogImage key={i} entry={entry} /> : null;
-              })
+              (() => {
+                let shownTag: string | null = null;
+                return segments.map((segment, i) => {
+                  if (segment.type === 'text') {
+                    shownTag = null;
+                    return <Markdown key={i} text={segment.text} />;
+                  }
+                  const entry = catalog?.get(segment.tag);
+                  // 사이에 글 없이 같은 이미지가 이어지면 한 번만 보여 준다
+                  if (!entry || entry.tag === shownTag) return null;
+                  shownTag = entry.tag;
+                  return <CatalogImage key={i} entry={entry} />;
+                });
+              })()
             )}
             {isStreaming && (
               <span className="inline-block w-0.5 h-4 bg-accent ml-0.5 animate-pulse align-middle" />

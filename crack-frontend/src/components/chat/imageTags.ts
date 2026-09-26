@@ -28,8 +28,10 @@ export function resolveCharacterImage(
 
 /** 한 줄에 단독으로 있는 `{{img:태그}}` */
 const TAG_LINE = /^\s*\{\{\s*img\s*:\s*([^\s:{}|]+)\s*\}\}\s*$/;
-/** 문장 속에 섞인 태그. 이미지로 바꾸지 않고 지운다 */
-const INLINE_TAG = /\{\{\s*img\s*:[^{}\n]*\}\}/g;
+/** 줄 안에 섞인 태그. 안쪽을 잡아 태그 이름인지 본다 */
+const INLINE_TAG = /\{\{\s*img\s*:([^{}\n]*)\}\}/g;
+/** 태그 이름으로 쓸 수 있는 글자 (DESIGN.md §8.5) */
+const TAG_NAME = /^[^\s:{}|]+$/;
 /** 스트리밍 중 줄 끝에서 아직 덜 들어온 태그 (`{{`, `{{im`, `{{img:설월`, `{{img:설월}`) */
 const TRAILING_PARTIAL = /\{\{(?:i(?:m(?:g(?::[^{}\n]*\}?)?)?)?)?$/;
 const TAG_PREFIX = '{{img:';
@@ -44,8 +46,9 @@ function isPartialTagLine(line: string): boolean {
 
 /**
  * 말풍선 본문을 텍스트와 이미지 조각으로 나눈다 (DESIGN.md §8.5).
- * - 한 줄에 단독으로 있는 `{{img:태그}}`만 이미지 조각이 된다. 태그가 카탈로그에 있는지는 렌더링할 때 본다.
- * - 문장 속에 섞인 태그는 지운다.
+ * - `{{img:태그}}`는 나온 자리에서 이미지 조각이 된다. 태그가 카탈로그에 있는지는 렌더링할 때 본다.
+ * - 줄 안에 섞여 있어도 그 자리에서 줄을 쪼갠다(D34). AI가 대사 앞에 붙여 쓸 때를 받아 준다.
+ * - 태그 이름으로 쓸 수 없는 글자가 들어 있으면(`{{img: }}` 등) 그 태그만 지운다.
  * - 스트리밍 중이면 마지막 줄(아직 줄바꿈이 오지 않은 줄)의 덜 들어온 태그를 숨긴다.
  */
 export function splitImageTags(content: string, streaming = false): BubbleSegment[] {
@@ -70,9 +73,24 @@ export function splitImageTags(content: string, streaming = false): BubbleSegmen
     if (tag !== undefined) {
       flush();
       segments.push({ type: 'image', tag });
-    } else {
-      buffer.push(line.replace(INLINE_TAG, ''));
+      continue;
     }
+    // 줄 안에 섞인 태그는 그 자리에서 줄을 쪼갠다
+    INLINE_TAG.lastIndex = 0;
+    let cursor = 0;
+    let text = '';
+    let match: RegExpExecArray | null;
+    while ((match = INLINE_TAG.exec(line)) !== null) {
+      text += line.slice(cursor, match.index);
+      cursor = match.index + match[0].length;
+      const inner = match[1].trim();
+      if (!TAG_NAME.test(inner)) continue; // 태그가 아니면 버린다
+      buffer.push(text);
+      flush();
+      text = '';
+      segments.push({ type: 'image', tag: inner });
+    }
+    buffer.push(text + line.slice(cursor));
   }
   flush();
   return segments;
