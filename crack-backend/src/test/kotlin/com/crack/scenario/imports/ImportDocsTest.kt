@@ -1,5 +1,6 @@
 package com.crack.scenario.imports
 
+import com.crack.chat.flow.EmotionTagFilter
 import com.crack.image.ImageCatalogParser
 import com.crack.memory.docs.CharacterDoc
 import com.crack.memory.docs.ProtagonistDoc
@@ -142,6 +143,66 @@ class ImportDocsTest {
         // 인물과 맞지 않는 이미지는 주석 안에 있어 파서가 읽지 않는다
         assertThat(text).contains("https://jangsue.uk/MG/img/bg.png")
         assertThat(entries.map { it.url }).doesNotContain("https://jangsue.uk/MG/img/bg.png")
+    }
+
+    @Test
+    fun `미분류 이미지는 줄마다 따로 주석으로 남기고 태그 이름을 넣지 않는다`() {
+        val text = ImportDocs.images(
+            characterImages = listOf("휘령" to "https://e.com/1.png"),
+            sceneUrls = listOf("https://e.com/a.png", "https://e.com/b.png", "https://e.com/c.png"),
+            source = source,
+        )
+
+        // BUG-024: 같은 태그 이름을 여러 줄에 넣으면 주석을 풀 때 첫 줄만 인식된다
+        assertThat(text).doesNotContain("태그를_정하세요")
+        assertThat(text).contains("<!-- 미분류 이미지 1: https://e.com/a.png — 쓰려면 주석을 풀고 태그 이름을 정하세요 -->")
+        assertThat(text).contains("<!-- 미분류 이미지 3: https://e.com/c.png — 쓰려면 주석을 풀고 태그 이름을 정하세요 -->")
+        // 주석 줄마다 자기 줄에서 닫힌다 → 한 줄만 풀어도 나머지는 그대로 주석이다
+        text.lines().filter { it.startsWith("<!-- 미분류") }.forEach { assertThat(it).endsWith("-->") }
+        assertThat(ImageCatalogParser.parse(text).map { it.tag }).containsExactly("휘령_기본")
+
+        // 한 줄을 풀어 태그를 정하면 그 줄만 읽힌다
+        val edited = text.replace(
+            "<!-- 미분류 이미지 2: https://e.com/b.png — 쓰려면 주석을 풀고 태그 이름을 정하세요 -->",
+            "- 객잔_밤: https://e.com/b.png | 밤의 객잔",
+        )
+        assertThat(ImageCatalogParser.parse(edited).map { it.tag }).containsExactly("휘령_기본", "객잔_밤")
+    }
+
+    @Test
+    fun `프롤로그 첫 줄 인물 태그를 인물 파일명으로 맞춘다`() {
+        val names = mapOf("휘 령" to "휘_령", "혜연" to "혜연")
+
+        val text = ImportDocs.prologue("[인물: 휘 령]\n\n*비가 그친 저녁.*\n", source, names)
+
+        assertThat(text).startsWith("[인물: 휘_령]\n")
+        assertThat(text).contains("*비가 그친 저녁.*")
+        assertThat(EmotionTagFilter.parse(text).tags.speaker).isEqualTo("휘_령")
+    }
+
+    @Test
+    fun `프롤로그 태그의 변형은 지우고 감정 태그는 남긴다`() {
+        val text = ImportDocs.prologue(
+            "[감정: 경계심] [인물: 혜연/미소]\n\n*문이 열렸다.*\n", source, mapOf("혜연" to "혜연"),
+        )
+
+        assertThat(text).startsWith("[감정: 경계심] [인물: 혜연]\n")
+        val parsed = EmotionTagFilter.parse(text)
+        assertThat(parsed.tags.speaker).isEqualTo("혜연")
+        assertThat(parsed.tags.speakerVariant).isNull()
+        assertThat(parsed.tags.emotion).isEqualTo("경계심")
+    }
+
+    @Test
+    fun `모르는 인물 태그는 지우고 태그가 없으면 본문을 그대로 둔다`() {
+        val names = mapOf("혜연" to "혜연")
+
+        val unknown = ImportDocs.prologue("[인물: 없는사람]\n\n*문이 열렸다.*\n", source, names)
+        assertThat(unknown).startsWith("*문이 열렸다.*")
+        assertThat(EmotionTagFilter.parse(unknown).tags.speaker).isNull()
+
+        val noTag = ImportDocs.prologue("*문이 열렸다.*\n\n\"누구냐.\"\n", source, names)
+        assertThat(noTag).startsWith("*문이 열렸다.*\n\n\"누구냐.\"")
     }
 
     @Test

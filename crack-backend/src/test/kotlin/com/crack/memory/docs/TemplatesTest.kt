@@ -26,6 +26,15 @@ class TemplatesTest {
     }
 
     @Test
+    fun `프롤로그 템플릿의 안내와 첫 줄 태그 예시는 첫 메시지로 읽히지 않는다`() {
+        val raw = java.nio.file.Files.readString(templates.resolve("prologue.md"))
+
+        assertTrue(raw.contains("[인물: 이름]"), "첫 줄 태그 안내가 있어야 한다")
+        // 전체가 HTML 주석이므로 그대로 복사해도 첫 메시지가 들어가지 않는다
+        assertEquals(null, com.crack.story.prologue.Prologue.render(raw, "무명"))
+    }
+
+    @Test
     fun `연대기 템플릿의 예시는 회차로 읽히지 않는다`() {
         val chronicle = Chronicle.read(templates.resolve("chronicle.md"))
         assertEquals(emptyList<ChronicleEntry>(), chronicle.entries())

@@ -49,7 +49,38 @@ object ImportDocs {
 
     // --- 문서 만들기 ---
 
-    /** `world.md`, `scenario.md`, `prologue.md`처럼 자동 기록 섹션이 없는 문서. */
+    /**
+     * `prologue.md`. 첫 줄의 `[인물: …]` 태그(§5.3, D31)를 **인물 파일명으로 맞춘다**(T29).
+     *
+     * LLM은 인물을 화면에 보이는 이름으로 쓰지만 이미지 태그는 파일명(`{파일명}_기본`)을 쓰므로,
+     * 이름을 다듬은 인물([safeName])이면 태그가 어긋나 첫 메시지에 이미지가 붙지 않는다.
+     * 알 수 없는 이름이면 태그를 지운다(태그만 남아도 이미지는 붙지 않는다).
+     * 변형은 지운다. 가져오기가 만든 카탈로그에는 `_기본`만 있다.
+     *
+     * @param characterFileNames 화면 이름 → 인물 파일명
+     */
+    fun prologue(body: String, source: String, characterFileNames: Map<String, String>): String {
+        val text = clean(body)
+        val newline = text.indexOf('\n')
+        val firstLine = if (newline < 0) text else text.substring(0, newline)
+        val rest = if (newline < 0) "" else text.substring(newline + 1)
+        val fixed = fixSpeakerTag(firstLine, characterFileNames)
+        val merged = if (fixed.isBlank() && firstLine.isNotBlank()) rest else fixed + "\n" + rest
+        return plain(merged, source)
+    }
+
+    /** 첫 줄의 인물 태그를 파일명으로 바꾼다. 찾지 못하면 태그를 지운다. 태그가 없으면 줄 그대로. */
+    private fun fixSpeakerTag(line: String, characterFileNames: Map<String, String>): String {
+        val match = SPEAKER_TAG.find(line) ?: return line
+        val name = match.groupValues[1].substringBefore('/').trim()
+        val fileName = characterFileNames[name]
+            ?: characterFileNames.entries.firstOrNull { it.key.replace(" ", "") == name.replace(" ", "") }?.value
+            ?: characterFileNames.values.firstOrNull { it == name }
+        val replacement = if (fileName == null) "" else "[인물: $fileName]"
+        return line.replaceRange(match.range, replacement).trim()
+    }
+
+    /** `world.md`, `scenario.md`처럼 자동 기록 섹션이 없는 문서. */
     fun plain(body: String, source: String, fallbackTitle: String? = null): String {
         val text = clean(body).ifBlank { fallbackTitle?.let { "# $it\n" }.orEmpty() }
         return text.trimEnd() + "\n\n" + source + "\n"
@@ -104,7 +135,10 @@ object ImportDocs {
 
     /**
      * `images.md`. 인물 이미지는 `{이름}_기본`으로 등록하고(T27 규칙),
-     * 인물과 맞지 않는 이미지는 주석 안에 장면 태그 후보로 남긴다(파서는 주석을 읽지 않는다).
+     * 인물과 맞지 않는 이미지는 **줄마다 따로** 주석으로 남긴다(파서는 주석을 읽지 않는다).
+     *
+     * 태그 이름을 미리 넣지 않는 이유(BUG-024): 여러 줄에 같은 태그 이름을 써 두면 사용자가 주석을 풀 때
+     * 중복 태그가 되어 첫 줄만 인식된다. 태그 이름은 사용자가 정한다.
      */
     fun images(characterImages: List<Pair<String, String>>, sceneUrls: List<String>, source: String): String =
         buildString {
@@ -120,9 +154,13 @@ object ImportDocs {
             if (sceneUrls.isNotEmpty()) {
                 append("\n<!-- 인물과 맞지 않는 이미지 ")
                 append(sceneUrls.size)
-                append("개입니다. 장면·배경 태그를 정하고 주석을 풀어 쓰세요.\n")
-                sceneUrls.forEach { append("- 태그를_정하세요: ").append(it).append(" | 설명\n") }
-                append("-->\n")
+                append("개입니다. 장면·배경으로 쓸 것만 아래 주석을 풀어 `- 태그: 주소 | 설명` 형식으로 고치세요. -->\n")
+                sceneUrls.forEachIndexed { index, url ->
+                    // 주석을 조기에 끝내는 문자열은 바꿔 둔다(주석 밖으로 새면 엉뚱한 줄이 남는다)
+                    append("<!-- 미분류 이미지 ").append(index + 1).append(": ")
+                        .append(url.replace("-->", "--%3E"))
+                        .append(" — 쓰려면 주석을 풀고 태그 이름을 정하세요 -->\n")
+                }
             }
             append('\n').append(source).append('\n')
         }
@@ -192,6 +230,9 @@ object ImportDocs {
     }
 
     private val KEYWORD_LINE = Regex("""^\s*키워드\s*[:：]""")
+
+    /** 첫 줄의 인물 태그. [com.crack.chat.flow.EmotionTagFilter.TAG]와 같은 형식이다. */
+    private val SPEAKER_TAG = Regex("""\[\s*인물\s*:([^\[\]]{0,200})]""")
 
     private fun fieldLine(field: String) =
         Regex("""^\s{0,3}[-*+]\s*\*\*${Regex.escape(field)}\*\*\s*[:：]""")
