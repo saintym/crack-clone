@@ -1,6 +1,6 @@
 # T29 응답 분량 기준 + 가져오기 후속 수정
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 8
 - **의존**: T27, T28
 - **브랜치**: `task/T29-response-length-and-import-fixes`
@@ -51,3 +51,7 @@
 - [ ] 상태 `REVIEW` + 작업 로그
 
 ## 작업 로그
+
+### 2026-09-26 시작
+- 명세(구현 내용 1~4), `docs/DESIGN.md` §2·§6·§8.5·§9·§11, `Plan-roadmap.md` D30~D33, BUG-024를 읽고 시작했다.
+- 기존 코드 확인: `BaseContributor`는 상수 `TEXT` 하나를 돌려주고 `PromptContext.storyDir`를 쓰지 않는다. 분량을 설정과 스토리별 파일로 바꾸려면 기여자가 `storyDir`를 읽어야 한다.
