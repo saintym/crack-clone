@@ -14,7 +14,8 @@ export type ScenarioDocumentType =
   | 'prologue'
   | 'keywords'
   | 'commands'
-  | 'images';
+  | 'images'
+  | 'settings';
 
 export interface CharacterInfo {
   type: string;

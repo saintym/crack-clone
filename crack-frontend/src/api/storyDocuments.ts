@@ -1,6 +1,6 @@
 import api from './client';
 
-/** 스토리 문서 종류 (DESIGN.md §9). 인물 파일은 `characters` */
+/** 스토리 문서 종류 (DESIGN.md §9). 인물 파일은 `characters`, `settings`는 `settings.json` */
 export type StoryDocumentKind =
   | 'world'
   | 'scenario'
@@ -10,7 +10,8 @@ export type StoryDocumentKind =
   | 'chronicle'
   | 'user_note'
   | 'keywords'
-  | 'commands';
+  | 'commands'
+  | 'settings';
 
 /** 목록 항목. `size`는 바이트 수. 실제로 있는 파일만 나온다 */
 export interface StoryDocumentSummary {
@@ -29,7 +30,7 @@ const base = (storyId: number) => `/stories/${storyId}/documents`;
 
 /**
  * 스토리 문서 API (DESIGN.md §9). 스토리 폴더의 문서만 읽고 쓴다(시나리오 원본과 다른 스토리는 영향 없음).
- * path 예: `chronicle.md`, `user_note.md`, `characters/설월.md`
+ * path 예: `chronicle.md`, `user_note.md`, `characters/설월.md`, `settings.json`
  */
 export const storyDocumentApi = {
   list: (storyId: number) =>

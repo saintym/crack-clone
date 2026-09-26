@@ -10,6 +10,8 @@ const USER_NOTE_PATH = 'user_note.md';
 // T18: 이 스토리의 키워드북·명령 (시나리오 원본에서 복사된 것. 여기서 고쳐도 원본과 다른 스토리는 그대로다)
 const KEYWORDS_PATH = 'keywords.md';
 const COMMANDS_PATH = 'commands.md';
+// T29: 응답 분량 등 이 스토리만의 조정값 (DESIGN.md §6.4). 없으면 전역 기본값을 쓴다
+const SETTINGS_PATH = 'settings.json';
 
 interface DocumentsViewProps {
   storyId: number;
@@ -43,6 +45,8 @@ export default function DocumentsView({ storyId, reloadKey }: DocumentsViewProps
         path={selected.path}
         title={selected.title}
         reloadKey={reloadKey}
+        plain={selected.path.endsWith('.json')}
+        hint={selected.path === SETTINGS_PATH ? SETTINGS_HINT : undefined}
         onBack={() => setSelected(null)}
       />
     );
@@ -85,11 +89,16 @@ export default function DocumentsView({ storyId, reloadKey }: DocumentsViewProps
         <div className="space-y-1.5">
           <DocumentRow title="키워드북" hint="키워드가 나오면 넣을 설정" onClick={() => open(KEYWORDS_PATH, '키워드북')} />
           <DocumentRow title="명령" hint="/ 사용자 정의 명령" onClick={() => open(COMMANDS_PATH, '명령')} />
+          <DocumentRow title="응답 분량" hint="한 응답의 목표 글자 수 (settings.json)" onClick={() => open(SETTINGS_PATH, '응답 분량')} />
         </div>
       </div>
     </div>
   );
 }
+
+/** settings.json은 사람이 직접 쓰는 JSON이라 형식 안내를 붙인다 */
+const SETTINGS_HINT =
+  '없으면 전역 기본값(800~1,500자)을 씁니다. 예: {"responseChars": {"min": 1200, "max": 2200}}';
 
 function DocumentRow({ title, hint, onClick }: { title: string; hint?: string; onClick: () => void }) {
   return (

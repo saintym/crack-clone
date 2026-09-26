@@ -12,6 +12,10 @@ interface DocumentEditorProps {
   title: string;
   /** 바뀌면 다시 받는다 (기억 기록·되돌리기로 문서가 바뀌었을 수 있을 때) */
   reloadKey: string;
+  /** 마크다운이 아닌 문서(settings.json)는 원문 그대로 보여 준다 */
+  plain?: boolean;
+  /** 편집 형식 안내 한 줄 */
+  hint?: string;
   onBack: () => void;
 }
 
@@ -29,7 +33,7 @@ interface Editing {
 }
 
 /** 스토리 문서 하나: 마크다운으로 보고, 텍스트 영역으로 고친다 */
-export default function DocumentEditor({ storyId, path, title, reloadKey, onBack }: DocumentEditorProps) {
+export default function DocumentEditor({ storyId, path, title, reloadKey, plain, hint, onBack }: DocumentEditorProps) {
   const key = `${storyId}:${path}:${reloadKey}`;
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   const [editing, setEditing] = useState<Editing | null>(null);
@@ -148,6 +152,7 @@ export default function DocumentEditor({ storyId, path, title, reloadKey, onBack
         </div>
       )}
 
+      {hint && <p className="mb-2 text-[12px] text-text-muted break-words">{hint}</p>}
       {saveError && <p className="mb-2 text-[12px] text-danger">{saveError}</p>}
       {loadError && <p className="text-[13px] text-danger">{loadError}</p>}
       {!ready && <p className="text-[13px] text-text-muted">불러오는 중…</p>}
@@ -163,11 +168,17 @@ export default function DocumentEditor({ storyId, path, title, reloadKey, onBack
 
       {ready && !loadError && !editing && (
         serverContent?.trim()
-          ? (
-            <div className="chat-markdown text-[14px] leading-[1.7] break-words text-text-primary">
-              <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{serverContent}</ReactMarkdown>
-            </div>
-          )
+          ? plain
+            ? (
+              <pre className="whitespace-pre-wrap break-words font-mono text-[13px] leading-[1.6] text-text-primary">
+                {serverContent}
+              </pre>
+            )
+            : (
+              <div className="chat-markdown text-[14px] leading-[1.7] break-words text-text-primary">
+                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{serverContent}</ReactMarkdown>
+              </div>
+            )
           : <p className="text-[13px] text-text-muted">{serverContent === null ? '아직 없는 문서입니다. 편집해서 만들 수 있습니다.' : '비어 있습니다.'}</p>
       )}
     </div>
