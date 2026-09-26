@@ -3,6 +3,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import type { MessageRole } from '../../types/chat';
+import type { ReadingMode } from '../../hooks/useReadingMode';
 import { isSafeImageUrl, type ImageEntry } from '../../api/images';
 import { hideEmotionTag } from './emotionTag';
 import { ImageCatalogContext, resolveCharacterImage, splitImageTags } from './imageTags';
@@ -14,6 +15,8 @@ interface ChatBubbleProps {
   speaker?: string | null;
   speakerVariant?: string | null;
   isStreaming?: boolean;
+  /** 'novel'이면 말풍선과 좌우 정렬을 없애고 한 흐름으로 읽힌다 (D35) */
+  mode?: ReadingMode;
 }
 
 const markdownComponents: Components = {
@@ -69,9 +72,13 @@ function CatalogImage({ entry }: { entry: ImageEntry }) {
  *
  * 본문에 카탈로그에 있는 `{{img:…}}`가 하나도 없으면 폴백으로 `speaker`로 인물 이미지를 골라
  * 맨 위에 보여 준다(§8.5, D31). AI가 본문 태그를 빠뜨린 턴과 옛 메시지를 위한 것이다.
+ *
+ * [mode]가 `novel`이면 말풍선과 좌우 정렬을 버리고 한 흐름으로 읽히게 한다(D35).
+ * 사용자 입력은 왼쪽 가는 선과 흐린 글자색으로만 구분한다.
  */
-export default function ChatBubble({ role, content, speaker, speakerVariant, isStreaming }: ChatBubbleProps) {
+export default function ChatBubble({ role, content, speaker, speakerVariant, isStreaming, mode = 'bubble' }: ChatBubbleProps) {
   const isUser = role === 'USER';
+  const novel = mode === 'novel';
   const catalog = useContext(ImageCatalogContext);
   const displayContent = hideEmotionTag(content, isStreaming);
   const segments = isUser ? null : splitImageTags(displayContent, isStreaming);
@@ -79,15 +86,21 @@ export default function ChatBubble({ role, content, speaker, speakerVariant, isS
   const hasBodyImage = segments?.some((s) => s.type === 'image' && catalog?.has(s.tag)) ?? false;
   const autoImage = hasBodyImage ? null : resolveCharacterImage(catalog, speaker, speakerVariant);
 
+  // 소설형: 폭을 꽉 채우고 배경과 테두리를 없앤다. 사용자 입력만 왼쪽에 가는 선을 둬 구분한다.
+  const outer = novel
+    ? 'block'
+    : `flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`;
+  const inner = novel
+    ? `w-full ${isUser ? 'border-l-2 border-accent/50 pl-3.5 py-0.5 text-text-secondary' : 'text-text-primary'}`
+    : `max-w-[85%] rounded-2xl px-4 py-3.5 ${
+        isUser
+          ? 'bg-user-bubble text-text-primary rounded-br-sm'
+          : 'bg-ai-bubble border border-border/40 text-text-primary rounded-bl-sm'
+      }`;
+
   return (
-    <div className={`flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
-      <div
-        className={`max-w-[85%] rounded-2xl px-4 py-3.5 ${
-          isUser
-            ? 'bg-user-bubble text-text-primary rounded-br-sm'
-            : 'bg-ai-bubble border border-border/40 text-text-primary rounded-bl-sm'
-        }`}
-      >
+    <div className={outer}>
+      <div className={inner}>
         {isStreaming && empty ? (
           <div className="flex items-center gap-1 h-[26px]" aria-label="응답 생성 중">
             <span className="w-1.5 h-1.5 rounded-full bg-text-muted animate-pulse" />
@@ -95,7 +108,7 @@ export default function ChatBubble({ role, content, speaker, speakerVariant, isS
             <span className="w-1.5 h-1.5 rounded-full bg-text-muted animate-pulse [animation-delay:300ms]" />
           </div>
         ) : (
-          <div className="chat-markdown text-[15px] leading-[1.7] break-words">
+          <div className={`chat-markdown break-words ${novel ? 'text-[15.5px] leading-[1.85]' : 'text-[15px] leading-[1.7]'}`}>
             {autoImage && <CatalogImage entry={autoImage} />}
             {segments === null ? (
               <Markdown text={displayContent} />

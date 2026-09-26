@@ -7,6 +7,7 @@ import { useProviders } from '../hooks/useProviders';
 import { useMessages } from '../hooks/useMessages';
 import { useChatStream } from '../hooks/useChatStream';
 import { useImageCatalog } from '../hooks/useImageCatalog';
+import { useReadingMode } from '../hooks/useReadingMode';
 import { ImageCatalogContext } from '../components/chat/imageTags';
 import StorySidebar from '../components/chat/StorySidebar';
 import ChatHeader from '../components/chat/ChatHeader';
@@ -33,6 +34,7 @@ export default function ChatPage() {
   const { providers, selectedProvider, setSelectedProvider } = useProviders(storyId);
   const chat = useMessages(storyId, refreshStories);
   const imageCatalog = useImageCatalog(storyId);
+  const reading = useReadingMode();
   const { stream, streaming, error: streamError, clearError: clearStreamError, send, regenerate, continueStory } =
     useChatStream({
       storyId,
@@ -103,6 +105,8 @@ export default function ChatPage() {
           onSelectProvider={setSelectedProvider}
           onOpenPanel={panelTabs.length > 0 ? () => setPanelOpen(true) : undefined}
           panelBadge={<MemoryBadge status={memory.status} />}
+          readingMode={reading.mode}
+          onToggleReadingMode={reading.toggle}
         />
 
         <ImageCatalogContext.Provider value={imageCatalog}>
@@ -116,6 +120,7 @@ export default function ChatPage() {
           onBranch={(msg) => setBranching({ messageId: msg.id, title: `${story?.title || '스토리'} - 분기` })}
           onEditSave={(msg, content) => chat.editMessage(msg.id, content)}
           onDelete={(msg) => chat.deleteFrom(msg.id)}
+          mode={reading.mode}
         />
         </ImageCatalogContext.Provider>
 
