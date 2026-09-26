@@ -157,6 +157,34 @@ class StoryIsolationTest {
     }
 
     @Test
+    fun `settings_json은 원본에서 복사되고 스토리마다 따로 분량을 바꾼다`() {
+        // 원본에 있으면 새 스토리로 복사된다(§6.4)
+        Files.writeString(scenarioDir.resolve("settings.json"), """{"responseChars": {"min": 1200, "max": 2200}}""")
+        val a = createStory("분량 A")
+        val b = createStory("분량 B")
+        assertTrue(Files.isRegularFile(storyDir(a).resolve("settings.json")))
+        assertTrue(prompt(a).contains("약 1,200~2,200자를 목표로 한다"))
+
+        // 문서 API(기억 패널)로 스토리 A만 고친다
+        putDoc(a, "settings.json", """{"responseChars": {"min": 400, "max": 700}}""")
+            .andExpect(status().isOk)
+            .andExpect(jsonPath("$.kind").value("settings"))
+        assertTrue(prompt(a).contains("약 400~700자를 목표로 한다"))
+        assertTrue(prompt(b).contains("약 1,200~2,200자를 목표로 한다"))
+        assertEquals(
+            """{"responseChars": {"min": 1200, "max": 2200}}""",
+            Files.readString(scenarioDir.resolve("settings.json")),
+        )
+
+        // 목록에 settings로 나온다(맨 뒤)
+        val body = mockMvc.perform(get("/api/stories/$a/documents")).andReturn().response.contentAsString
+        val items: List<Map<String, Any>> = objectMapper.readValue(
+            body, objectMapper.typeFactory.constructCollectionType(List::class.java, Map::class.java)
+        )
+        assertEquals("settings.json" to "settings", items.last().let { it["path"] to it["kind"] })
+    }
+
+    @Test
     fun `경로 조작과 화이트리스트 밖 경로는 400으로 거부한다`() {
         val a = createStory("A")
         val b = createStory("B")
