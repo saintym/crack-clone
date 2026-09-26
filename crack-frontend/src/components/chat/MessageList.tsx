@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Message } from '../../types/chat';
 import type { StreamState } from '../../hooks/useChatStream';
+import type { ReadingMode } from '../../hooks/useReadingMode';
 import ChatBubble from './ChatBubble';
 import MessageMenu from './MessageMenu';
 
@@ -19,14 +20,17 @@ interface MessageListProps {
   onEditSave: (message: Message, content: string) => Promise<boolean>;
   /** 이 메시지부터 끝까지 삭제 */
   onDelete: (message: Message) => void;
+  /** 'novel'이면 말풍선 없이 한 흐름으로 읽힌다 (D35) */
+  mode: ReadingMode;
 }
 
 const isComposing = (e: React.KeyboardEvent) => e.nativeEvent.isComposing || e.keyCode === 229;
 
 /** 메시지 목록, 스트리밍 중인 응답, 인라인 편집기와 재생성 지시 입력 */
 export default function MessageList({
-  messages, stream, locked, onSelectVariant, onRegenerate, onContinue, onBranch, onEditSave, onDelete,
+  messages, stream, locked, onSelectVariant, onRegenerate, onContinue, onBranch, onEditSave, onDelete, mode,
 }: MessageListProps) {
+  const novel = mode === 'novel';
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [editing, setEditing] = useState<{ id: number; content: string; saving: boolean } | null>(null);
@@ -72,7 +76,8 @@ export default function MessageList({
   const streamingInPlace = stream?.mode === 'regenerate' && stream.targetId !== undefined;
 
   return (
-    <div className="flex-1 overflow-y-auto px-4 py-5 space-y-5 bg-bg-chat">
+    <div className={`flex-1 overflow-y-auto bg-bg-chat ${novel ? 'px-5 py-7' : 'px-4 py-5 space-y-5'}`}>
+      <div className={novel ? 'max-w-[44rem] mx-auto space-y-6' : 'contents'}>
       {messages.length === 0 && !stream && (
         <div className="flex flex-col items-center justify-center h-full text-text-muted">
           <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.2" className="mb-3 opacity-30">
@@ -88,15 +93,15 @@ export default function MessageList({
 
         // 재생성 중에는 원래 답변 자리에 새 응답을 보인다. 실패하면 스트림이 사라지고 원래 답변이 다시 보인다.
         if (streamingInPlace && stream?.targetId === msg.id) {
-          return <ChatBubble key={msg.id} role="ASSISTANT" content={stream.content} isStreaming />;
+          return <ChatBubble key={msg.id} role="ASSISTANT" content={stream.content} isStreaming mode={mode} />;
         }
 
         const isEditing = editing?.id === msg.id;
         return (
           <div key={msg.id}>
             {isEditing ? (
-              <div className={`flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
-                <div className="max-w-[85%] w-full">
+              <div className={novel ? 'block' : `flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
+                <div className={novel ? 'w-full' : 'max-w-[85%] w-full'}>
                   <textarea
                     value={editing.content}
                     onChange={(e) => setEditing({ ...editing, content: e.target.value })}
@@ -106,7 +111,7 @@ export default function MessageList({
                     autoFocus
                     className="w-full p-4 bg-surface border border-accent/60 rounded-2xl text-text-primary text-[15px] resize-y focus:outline-none leading-relaxed min-h-[120px]"
                   />
-                  <div className={`flex gap-2 mt-2 ${isUser ? 'justify-end' : ''}`}>
+                  <div className={`flex gap-2 mt-2 ${isUser && !novel ? 'justify-end' : ''}`}>
                     <button
                       onClick={() => setEditing(null)}
                       className="px-4 py-2 text-sm bg-surface hover:bg-surface-hover text-text-secondary rounded-xl transition-all"
@@ -129,11 +134,18 @@ export default function MessageList({
                 content={msg.content}
                 speaker={msg.speaker}
                 speakerVariant={msg.speakerVariant}
+                mode={mode}
               />
             )}
 
             {!isEditing && (
-              <div className={`flex items-center gap-2 mt-1.5 px-1 ${isUser ? 'justify-end' : ''}`}>
+              <div
+                className={`flex items-center gap-2 px-1 ${
+                  novel
+                    ? 'mt-0.5 opacity-35 hover:opacity-100 focus-within:opacity-100 transition-opacity'
+                    : `mt-1.5 ${isUser ? 'justify-end' : ''}`
+                }`}
+              >
                 {!locked && (
                   <MessageMenu
                     isUser={isUser}
@@ -164,8 +176,8 @@ export default function MessageList({
             )}
 
             {instructing?.id === msg.id && !locked && (
-              <div className="flex justify-start pr-10 mt-2">
-                <div className="max-w-[85%] w-full">
+              <div className={novel ? 'block mt-2' : 'flex justify-start pr-10 mt-2'}>
+                <div className={novel ? 'w-full' : 'max-w-[85%] w-full'}>
                   <textarea
                     value={instructing.text}
                     onChange={(e) => setInstructing({ ...instructing, text: e.target.value })}
@@ -202,13 +214,14 @@ export default function MessageList({
         );
       })}
 
-      {stream?.pendingUser && <ChatBubble role="USER" content={stream.pendingUser} />}
+      {stream?.pendingUser && <ChatBubble role="USER" content={stream.pendingUser} mode={mode} />}
 
       {stream && !streamingInPlace && (
-        <ChatBubble role="ASSISTANT" content={stream.content} isStreaming />
+        <ChatBubble role="ASSISTANT" content={stream.content} isStreaming mode={mode} />
       )}
 
       <div ref={messagesEndRef} />
+      </div>
     </div>
   );
 }

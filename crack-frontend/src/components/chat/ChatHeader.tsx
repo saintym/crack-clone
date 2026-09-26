@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Scenario } from '../../api/scenarios';
+import type { ReadingMode } from '../../hooks/useReadingMode';
 
 interface ChatHeaderProps {
   title: string;
@@ -14,11 +15,15 @@ interface ChatHeaderProps {
   onOpenPanel?: () => void;
   /** 패널 버튼 오른쪽 위에 겹쳐 보일 작은 뱃지 (T15 기억 뱃지). 흐름을 끊지 않는 표시만 넣는다 */
   panelBadge?: ReactNode;
+  /** 읽기 모드와 전환 (D35) */
+  readingMode: ReadingMode;
+  onToggleReadingMode: () => void;
 }
 
 /** 채팅 상단 바: 사이드바 열기, 뒤로 가기, 스토리 제목, AI 프로바이더 선택 */
 export default function ChatHeader({
   title, scenario, onOpenSidebar, providers, selectedProvider, onSelectProvider, onOpenPanel, panelBadge,
+  readingMode, onToggleReadingMode,
 }: ChatHeaderProps) {
   const navigate = useNavigate();
   const [showProviderMenu, setShowProviderMenu] = useState(false);
@@ -52,6 +57,26 @@ export default function ChatHeader({
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={onToggleReadingMode}
+          title={readingMode === 'novel' ? '대화형으로 보기' : '소설형으로 보기'}
+          aria-label={readingMode === 'novel' ? '대화형으로 보기' : '소설형으로 보기'}
+          className="text-text-secondary hover:text-text-primary p-1"
+        >
+          {readingMode === 'novel' ? (
+            // 말풍선 (누르면 대화형으로)
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" />
+            </svg>
+          ) : (
+            // 펼친 책 (누르면 소설형으로)
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M2 4h6a3 3 0 013 3v13a2.5 2.5 0 00-2.5-2.5H2z" />
+              <path d="M22 4h-6a3 3 0 00-3 3v13a2.5 2.5 0 012.5-2.5H22z" />
+            </svg>
+          )}
+        </button>
+
         {onOpenPanel && (
           <button
             onClick={onOpenPanel}
