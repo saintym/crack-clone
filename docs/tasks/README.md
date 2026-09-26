@@ -51,6 +51,7 @@
 | 8 | [T25](./T25-deep-query-fallback.md) | 검색이 헛돈 턴의 깊은 질의 1회 | T24 |
 | 8 | [T27](./T27-image-auto-insert.md) | 인물 이미지 자동 삽입(V8) + 카탈로그 등록 UX | — |
 | 8 | [T28](./T28-scenario-import-from-url.md) | URL에서 시나리오 가져오기 (분석 → 질문 → 생성) | T27 |
+| 8 | [T29](./T29-response-length-and-import-fixes.md) | 응답 분량 기준(D33) + 프롤로그 화자 태그 + BUG-024 | T27, T28 |
 | 9 | [T26](./T26-offscreen-characters.md) | 오프스크린 캐릭터 진행 — **보류**(사용자 테스트 후) | T24, T25 |
 
 진행 흐름 요약 (정확한 의존 관계는 위 표가 기준이다):
