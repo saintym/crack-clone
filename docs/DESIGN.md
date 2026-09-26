@@ -614,6 +614,7 @@ src/hooks/useChatStream.ts          SSE 전송, 재생성, 이어쓰기
 src/hooks/useMessages.ts            메시지 목록 상태
 src/hooks/useProviders.ts           프로바이더 목록과 선택
 src/hooks/useStoryContext.ts        현재 스토리, 시나리오, 사이드바 목록
+src/hooks/useReadingMode.ts         읽기 모드(말풍선/소설형), localStorage에 저장 (T31)
 src/types/chat.ts, types/panel.ts   공용 타입
 src/components/chat/ChatHeader.tsx
 src/components/chat/MessageList.tsx
@@ -627,6 +628,22 @@ src/components/panels/…             T15 기억 패널, T18 지시 패널, T19 
 ```
 
 패널은 채팅 화면 오른쪽 드로어(모바일은 하단 시트)에 탭으로 모은다. **플레이 흐름을 가리는 모달은 쓰지 않는다** (D7).
+
+### 10.1 읽기 모드 (T31, D35)
+
+채팅 화면은 두 가지로 볼 수 있다. 상단 바의 버튼으로 전환하고, `useReadingMode`가 `localStorage`(`crack.readingMode`)에 기억한다. 브라우저마다 따로 기억하며 서버에 올리지 않는다. **기본값은 소설형이다.**
+
+| | 말풍선 (`bubble`) | 소설형 (`novel`) |
+|---|---|---|
+| 정렬 | AI 왼쪽, 사용자 오른쪽 | 전부 같은 흐름. 좌우 정렬 없음 |
+| 배경 | 말풍선 배경과 테두리 | 없음 |
+| 폭 | 각 말풍선 최대 85% | 본문 전체를 `max-w-[44rem]`로 가운데 정렬 |
+| 사용자 입력 | 말풍선 색으로 구분 | **왼쪽 2px 강조선 + 흐린 글자색**으로만 구분 |
+| 줄 간격 | 1.7 | 1.85 (읽기용) |
+| 메시지 메뉴 | 항상 보임 | 흐리게 두고(35%) 올리거나 포커스하면 진해짐 |
+
+- 모드는 `ChatBubble`과 `MessageList`에 `mode` prop으로 내려간다. 인라인 편집기와 재생성 지시 입력도 소설형에서는 폭을 채운다.
+- **인물 이미지(§8.5)는 두 모드에서 똑같이 동작한다.** 소설형에서는 본문 폭을 그대로 써서 더 크게 보인다.
 
 ## 11. URL에서 시나리오 가져오기 (T28, D32)
 
