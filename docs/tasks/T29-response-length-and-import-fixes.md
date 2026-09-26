@@ -1,6 +1,6 @@
 # T29 응답 분량 기준 + 가져오기 후속 수정
 
-- **상태**: IN_PROGRESS
+- **상태**: REVIEW
 - **웨이브**: 8
 - **의존**: T27, T28
 - **브랜치**: `task/T29-response-length-and-import-fixes`
@@ -45,13 +45,41 @@
 - `bugs/README.md`와 BUG-024 상태를 갱신한다
 
 ## 완료 조건
-- [ ] `./gradlew test` 통과. 테스트: 분량 문구가 설정값을 반영, `settings.json` 있을 때 우선·깨졌을 때 폴백, 프롤로그 태그 프롬프트, 미분류 이미지 주석 출력
-- [ ] `npm run build`, `npm run lint` 오류 0 (프론트를 건드렸다면)
-- [ ] Fake 프로바이더로 스토리 생성 시 `settings.json` 복사 확인
-- [ ] 상태 `REVIEW` + 작업 로그
+- [x] `./gradlew test` 통과(544개, 실패 0). 테스트: 분량 문구가 설정값을 반영, `settings.json` 있을 때 우선·깨졌을 때 폴백, 프롤로그 태그 프롬프트, 미분류 이미지 주석 출력
+- [x] `npm run build`, `npm run lint` 오류 0
+- [x] Fake 프로바이더로 스토리 생성 시 `settings.json` 복사 확인(아래 "확인한 방법")
+- [x] 상태 `REVIEW` + 작업 로그
 
 ## 작업 로그
 
 ### 2026-09-26 시작
 - 명세(구현 내용 1~4), `docs/DESIGN.md` §2·§6·§8.5·§9·§11, `Plan-roadmap.md` D30~D33, BUG-024를 읽고 시작했다.
 - 기존 코드 확인: `BaseContributor`는 상수 `TEXT` 하나를 돌려주고 `PromptContext.storyDir`를 쓰지 않는다. 분량을 설정과 스토리별 파일로 바꾸려면 기여자가 `storyDir`를 읽어야 한다.
+
+### 2026-09-26 구현
+**한 일**
+1. **응답 분량(D33)**: `crack.prompt.response-chars.min/max`(기본 800/1500) 추가. `BaseContributor`가 출력 형식에 `- 분량은 한 응답에 약 800~1,500자를 목표로 한다. … 2,000자를 넘기지 마라.` 한 줄을 넣고, 핵심 규칙의 "최소 200자" 문구를 지웠다.
+2. **시나리오별 조정**: 신규 `com.crack.story.settings.StorySettings`(순수 파일 라이브러리)가 스토리 폴더의 `settings.json`을 읽어 전역 기본값을 덮어쓴다. `StoryFiles.COPIED_FILES`에 추가해 원본에 있으면 스토리로 복사하고, 스토리 문서 API 화이트리스트(`kind: settings`)와 시나리오 원본 문서 타입(`settings`)에 넣었다. 기억 패널 "이 스토리의 설정"에 **응답 분량** 행을 만들었다.
+3. **프롤로그 화자 태그**: 가져오기 3단계 프롬프트가 `prologue` 첫 줄에 `[인물: 이름]`을 쓰게 한다. `data/_templates/prologue.md`에도 안내와 예시를 넣었다.
+4. **미분류 이미지(BUG-024)**: `ImportDocs.images`가 줄마다 따로 닫히는 주석으로 남기고 태그 이름은 넣지 않는다.
+
+**설계 판단과 이유**
+- **절대 상한을 따로 설정하지 않고 `max + 500`으로 만든다.** 설정 키가 셋이면 `min ≤ max ≤ hardMax`를 사용자가 직접 맞춰야 하고, `settings.json` 형식(명세)에는 `hardMax`가 없다. 기본값에서 정확히 2,000자가 되고(D33), 스토리가 상한을 올리면 절대 상한도 같이 올라간다.
+- **`BaseContributor`의 생성자 인자에 기본값을 뒀다**(`PromptProperties()`). Spring은 빈을 주입하고, 기존 테스트의 `BaseContributor()` 호출은 그대로 컴파일된다.
+- **분량 문구는 `ctx.storyDir`를 읽어 만든다.** 캐시 접두사(D30)는 스토리 안에서 안 바뀌므로 문제없다. `settings.json`을 고친 턴에만 바뀐다.
+- **잘못된 값은 턴을 실패시키지 않는다.** JSON 오류·이상한 범위(`min ≤ 0`, `min > max`, `max > 20000`)는 경고 로그 후 전역 기본값. 몰입을 끊지 않는다는 원칙대로 사용자에게 모달을 띄우지 않는다.
+- **프롤로그 태그를 코드로 한 번 더 맞춘다**(`ImportDocs.prologue`). LLM은 화면 이름(`설 소저`)을 쓰지만 이미지 태그는 파일명(`설_소저_기본`)이라 태그가 어긋나면 이미지가 안 붙는다. 이름을 파일명으로 바꾸고, 모르는 이름이면 태그를 지우고, 변형은 지운다(가져오기 카탈로그에는 `_기본`만 있다). bugs/README의 "LLM 출력 방어" 패턴을 따랐다.
+- **미분류 이미지 주석은 줄마다 닫는다.** 한 줄만 풀어도 나머지는 주석으로 남고, 태그 이름을 미리 넣지 않으니 중복 태그가 생기지 않는다.
+- **프론트 `DocumentEditor`에 `plain`·`hint`를 더했다.** `settings.json`은 유일한 비마크다운 문서라 마크다운으로 렌더링하면 형식이 망가진다.
+
+**확인한 방법**
+- `./gradlew test`: 544개 통과, 실패 0. `npm run build`, `npm run lint` 오류 0.
+- 새 테스트: `StorySettingsTest`(기본값·우선순위·깨진 JSON·이상한 범위·템플릿), `PromptContributorsTest`(분량 문구 4개), `StoryIsolationTest`(원본 복사 → 스토리 A만 수정 → B와 원본 그대로, 목록 `settings`), `StoryFilesTest`(복사), `ImportDocsTest`(프롤로그 태그 3개, 미분류 이미지), `ImportPromptsTest`(프롤로그 태그 지시), `TemplatesTest`(프롤로그 템플릿은 첫 메시지로 읽히지 않는다).
+- **실제 앱 확인**(백엔드 18229, 스크래치 data 폴더, 임시 DB `crack_t29`, fake 프로바이더): 원본에 `settings.json`(1200/2200)을 둔 시나리오로 스토리를 만들자 스토리 폴더로 복사되고 문서 목록에 `settings`로 나왔다. `prompt-preview`가 `약 1,200~2,200자 … 2,700자를 넘기지 마라`를 보여 줬고, 문서 API로 400/700으로 고치자 `약 400~700자 … 1,200자`로 바뀌었고, 깨진 JSON을 넣자 경고 로그와 함께 `약 800~1,500자 … 2,000자`로 돌아갔다. 첫 줄에 `[인물: 설월/경계]`를 쓴 `prologue.md`는 첫 메시지의 `speaker=설월`, `speakerVariant=경계`로 저장됐다. 확인 뒤 앱을 내리고 DB를 지웠다(사용자의 8082·5173은 건드리지 않았다).
+
+**다음 작업자가 알아야 할 것**
+- 분량 조정 위치는 두 곳이다. 전역은 `crack-backend/src/main/resources/application.yml`의 `crack.prompt.response-chars.min/max`(없으면 800/1500), 스토리별은 스토리 폴더의 `settings.json`(기억 패널 → 이 스토리의 설정 → 응답 분량). 시나리오 원본에 두면 **그 뒤에 만드는 스토리**에만 복사된다. 이미 만든 스토리는 스토리 쪽 파일을 고쳐야 한다.
+- 절대 상한은 `max + 500`이다. 따로 못 바꾼다. 바꿔야 하면 `ResponseChars.HARD_MAX_MARGIN`을 설정으로 빼야 한다.
+- 실제 모델이 이 지시를 얼마나 지키는지는 아직 측정하지 않았다. 다음 실플레이에서 턴별 응답 길이와 지연을 다시 재 보면 좋다. 안 지키면 `max_tokens`를 분량에 맞춰 내리는 방법이 남아 있다(지금은 프롬프트 지시만).
+- `settings.json`은 문서 목록의 **맨 뒤**에 온다(`Kind.SETTINGS`가 마지막). 새 종류를 넣을 때 순서가 목록 순서라는 점을 기억할 것.
+- `data/_templates/settings.json`의 `_안내`·`_responseChars` 필드는 JSON에 주석을 못 쓰기 때문에 둔 안내다. 파서가 모르는 필드를 무시하므로 그대로 복사해도 된다.
