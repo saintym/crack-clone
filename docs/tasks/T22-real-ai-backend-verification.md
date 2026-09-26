@@ -10,7 +10,7 @@
 지금까지 검증은 Fake 프로바이더로만 했다. **실제 Claude Code CLI**로 모든 대화·기억 기능을 끝까지 돌려, 동작과 **출력 품질**을 확인한다. 발견한 문제는 버그로 등록하고, 작은 것은 고친다.
 
 ## 실행 환경 (오케스트레이터가 준비해 둠)
-- PostgreSQL: Docker `crack-postgres`(postgres:15-alpine, localhost:5432, DB `crack`, user `postgres` / `artl0108`). Flyway V1~V7 적용됨
+- PostgreSQL: Docker `crack-postgres`(postgres:15-alpine, localhost:5432, DB `crack`, user `postgres` / 비밀번호는 로컬 `application.yml`의 `spring.datasource.password` 참고). Flyway V1~V7 적용됨
 - 백엔드: `crack-backend/build/libs/crack-backend-0.0.1-SNAPSHOT.jar`가 :8082에서 실행 중. 인자는 `--crack.data-path=/Users/mayfly/work/crack-clone/data --crack.memory.record.every-turns=3`
 - 프로바이더: `claude-code-cli`(유일). 한 턴 약 15~30초, 토큰 단위 스트리밍 확인됨
 - 시나리오: `마도생존기`(id 1, 인물 24명, 실데이터), `테스트세계`(id 2). 스토리 1은 오케스트레이터의 CLI 확인용

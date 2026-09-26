@@ -10,7 +10,7 @@
 실제 브라우저에서 실제 CLI 응답으로 UI 전체를 조작해 본다. 지금까지 프론트 확인은 작업별 부분 검증이었다. **사용감과 조작 흐름**에서 문제를 찾는 것이 목적이다.
 
 ## 실행 환경 (오케스트레이터가 준비해 둠)
-- PostgreSQL Docker `crack-postgres`(localhost:5432, `crack`, postgres/artl0108), Flyway V1~V7 적용
+- PostgreSQL Docker `crack-postgres`(localhost:5432, `crack`, postgres / 비밀번호는 로컬 `application.yml` 참고), Flyway V1~V7 적용
 - 백엔드 :8082 실행 중(`--crack.data-path=/Users/mayfly/work/crack-clone/data --crack.memory.record.every-turns=3`), 프로바이더 `claude-code-cli`
 - 프론트는 직접 띄운다: `cd crack-frontend && npm run dev` (기본 :5173, 프록시 → :8082)
 - 로그인 비밀번호는 `crack-backend/src/main/resources/application.yml`의 `crack.auth.password` 기본값
