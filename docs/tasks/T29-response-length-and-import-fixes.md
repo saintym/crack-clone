@@ -77,6 +77,11 @@
 - 새 테스트: `StorySettingsTest`(기본값·우선순위·깨진 JSON·이상한 범위·템플릿), `PromptContributorsTest`(분량 문구 4개), `StoryIsolationTest`(원본 복사 → 스토리 A만 수정 → B와 원본 그대로, 목록 `settings`), `StoryFilesTest`(복사), `ImportDocsTest`(프롤로그 태그 3개, 미분류 이미지), `ImportPromptsTest`(프롤로그 태그 지시), `TemplatesTest`(프롤로그 템플릿은 첫 메시지로 읽히지 않는다).
 - **실제 앱 확인**(백엔드 18229, 스크래치 data 폴더, 임시 DB `crack_t29`, fake 프로바이더): 원본에 `settings.json`(1200/2200)을 둔 시나리오로 스토리를 만들자 스토리 폴더로 복사되고 문서 목록에 `settings`로 나왔다. `prompt-preview`가 `약 1,200~2,200자 … 2,700자를 넘기지 마라`를 보여 줬고, 문서 API로 400/700으로 고치자 `약 400~700자 … 1,200자`로 바뀌었고, 깨진 JSON을 넣자 경고 로그와 함께 `약 800~1,500자 … 2,000자`로 돌아갔다. 첫 줄에 `[인물: 설월/경계]`를 쓴 `prologue.md`는 첫 메시지의 `speaker=설월`, `speakerVariant=경계`로 저장됐다. 확인 뒤 앱을 내리고 DB를 지웠다(사용자의 8082·5173은 건드리지 않았다).
 
+**범위 밖 수정 (최소한으로)**
+- `crack-frontend/src/api/{documents,storyDocuments}.ts`, `components/panels/memory/{DocumentsView,DocumentEditor}.tsx`: 범위 목록에는 프론트가 없지만, 구현 내용 2의 "기억 패널에서 고칠 수 있게"를 만족시키려면 패널에 행이 있어야 한다(완료 조건도 프론트 빌드를 전제한다). 문서 종류 유니온에 `settings` 추가 + 행 하나 + `DocumentEditor`의 `plain`·`hint` 옵션까지만 고쳤다.
+- `crack-backend/.../document/service/DocumentService.kt`: 시나리오 원본에 `settings.json`을 두려면 원본 문서 타입에도 `settings`가 필요하다(스토리로 복사되는 출처가 원본이다). enum 항목 하나만 더했다.
+- `crack-backend/src/test/.../migration/LegacyStoryMigratorTest.kt`: `COPIED_FILES`를 그대로 순회하며 픽스처를 읽던 단정이 새 선택 문서 때문에 깨졌다. 원본에 있는 파일만 비교하도록 고쳤다(픽스처에 `settings.json`을 넣으면 다른 프롬프트 테스트의 기대값이 흔들려 이 방향을 골랐다).
+
 **다음 작업자가 알아야 할 것**
 - 분량 조정 위치는 두 곳이다. 전역은 `crack-backend/src/main/resources/application.yml`의 `crack.prompt.response-chars.min/max`(없으면 800/1500), 스토리별은 스토리 폴더의 `settings.json`(기억 패널 → 이 스토리의 설정 → 응답 분량). 시나리오 원본에 두면 **그 뒤에 만드는 스토리**에만 복사된다. 이미 만든 스토리는 스토리 쪽 파일을 고쳐야 한다.
 - 절대 상한은 `max + 500`이다. 따로 못 바꾼다. 바꿔야 하면 `ResponseChars.HARD_MAX_MARGIN`을 설정으로 빼야 한다.
