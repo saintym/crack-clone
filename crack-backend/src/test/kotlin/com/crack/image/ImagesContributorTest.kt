@@ -17,7 +17,7 @@ import org.mockito.kotlin.mock
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** IMAGES 기여자 (DESIGN.md §6, §8.5, D31) */
+/** IMAGES 기여자 (DESIGN.md §6, §8.5, D31·D34) */
 class ImagesContributorTest {
 
     @TempDir lateinit var root: Path
@@ -83,10 +83,11 @@ class ImagesContributorTest {
 
         val text = c.contribute(ctx)!!
 
-        assertThat(text).contains("[인물: 이름/변형]", "- 설월 — 기본, 당황(눈을 크게 뜬 모습)")
+        // 본문에 직접 넣는 방법을 안내한다(D34)
+        assertThat(text).contains("{{img:이름_변형}}", "- 설월 — 기본, 당황(눈을 크게 뜬 모습)")
         // 활성 인물이 아닌 무극은 넣지 않는다
         assertThat(text).doesNotContain("무극")
-        // 인물 이미지는 장면 태그 목록에 넣지 않는다(본문에 직접 쓰지 못하게)
+        // 변형 목록은 인물별 한 줄이다. 장면 태그처럼 낱개로 늘어놓지 않는다
         assertThat(text).doesNotContain("- 설월_기본", "- 무극_기본")
         assertThat(text).contains("- 객잔_밤: 비 내리는 밤")
     }
@@ -114,7 +115,7 @@ class ImagesContributorTest {
         )
 
         val text = c.contribute(ctx)!!
-        assertThat(text).doesNotContain("설월", "[인물:")
+        assertThat(text).doesNotContain("설월", "{{img:이름_변형}}")
         assertThat(text).contains("- 객잔_밤")
     }
 
