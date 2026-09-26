@@ -3,7 +3,9 @@ package com.crack.prompt.contributor
 import com.crack.memory.docs.ChronicleEntry
 import com.crack.memory.docs.MemoryBudgets
 import com.crack.memory.docs.StoryState
+import com.crack.prompt.config.PromptProperties
 import com.crack.prompt.keyword.KeywordMatcher
+import com.crack.story.settings.ResponseChars
 import com.crack.story.files.SampleScenario
 import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -85,6 +87,44 @@ class PromptContributorsTest {
         val base = BaseContributor().contribute(ctx())
         assertThat(base).contains("`**…**`").contains("상황 묘사").contains("`\"…\"`").contains("대사")
         assertThat(base).contains("[감정: (현재 감정 1~3개)]").contains("[지시]")
+    }
+
+    // ---- 응답 분량 (T29, D33) ----
+
+    @Test
+    fun `BASE는 전역 기본값으로 목표 분량을 넣고 최소 200자 문구는 없다`() {
+        val base = BaseContributor().contribute(ctx())
+        assertThat(base).contains("분량은 한 응답에 약 800~1,500자를 목표로 한다")
+        assertThat(base).contains("2,000자를 넘기지 마라")
+        assertThat(base).doesNotContain("최소 200자")
+    }
+
+    @Test
+    fun `BASE의 목표 분량은 전역 설정값을 반영한다`() {
+        val props = PromptProperties(responseChars = ResponseChars(min = 500, max = 900))
+        assertThat(BaseContributor(props).contribute(ctx()))
+            .contains("약 500~900자를 목표로 한다")
+            .contains("1,400자를 넘기지 마라")
+    }
+
+    @Test
+    fun `스토리 폴더의 settings_json이 전역 설정보다 우선한다`() {
+        Files.writeString(storyDir.resolve("settings.json"), """{"responseChars": {"min": 1200, "max": 2200}}""")
+        assertThat(BaseContributor().contribute(ctx()))
+            .contains("약 1,200~2,200자를 목표로 한다")
+            .contains("2,700자를 넘기지 마라")
+    }
+
+    @Test
+    fun `settings_json이 깨졌으면 전역 설정으로 돌아간다`() {
+        Files.writeString(storyDir.resolve("settings.json"), "{ responseChars: ")
+        assertThat(BaseContributor().contribute(ctx())).contains("약 800~1,500자를 목표로 한다")
+    }
+
+    @Test
+    fun `settings_json의 범위가 뒤집혀 있으면 전역 설정으로 돌아간다`() {
+        Files.writeString(storyDir.resolve("settings.json"), """{"responseChars": {"min": 3000, "max": 1000}}""")
+        assertThat(BaseContributor().contribute(ctx())).contains("약 800~1,500자를 목표로 한다")
     }
 
     @Test

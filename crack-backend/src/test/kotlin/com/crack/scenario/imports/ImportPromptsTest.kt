@@ -48,6 +48,16 @@ class ImportPromptsTest {
     }
 
     @Test
+    fun `주인공 단계는 프롤로그 첫 줄에 인물 태그를 쓰게 한다`() {
+        val prompt = ImportPrompts.protagonistStep("(없음)", listOf("휘령", "혜연"))
+
+        assertNotIndented(prompt)
+        assertThat(prompt).contains("[인물: (첫 장면의 중심 인물 이름)]")
+        assertThat(prompt).contains("`prologue`의 첫 줄은 `[인물: 이름]` 태그다")
+        assertThat(prompt).contains("첫 장면에 인물이 없으면")
+    }
+
+    @Test
     fun `답이 없으면 안내 문구를 넣는다`() {
         val answers = ImportPrompts.formatAnswers(questions, mapOf("q1" to "  "))
 

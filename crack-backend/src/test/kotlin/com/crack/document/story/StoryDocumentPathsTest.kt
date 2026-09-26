@@ -29,6 +29,7 @@ class StoryDocumentPathsTest {
             "user_note.md" to Kind.USER_NOTE,
             "keywords.md" to Kind.KEYWORDS,
             "commands.md" to Kind.COMMANDS,
+            "settings.json" to Kind.SETTINGS,
         )
         for ((path, kind) in expected) {
             assertEquals(StoryDocumentPaths.DocPath(path, kind), StoryDocumentPaths.parse(path), path)

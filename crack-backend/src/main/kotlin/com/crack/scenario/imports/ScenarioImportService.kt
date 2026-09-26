@@ -181,7 +181,8 @@ class ScenarioImportService(
                 ImportDocs.protagonist(protagonistName(job, answers), protagonistBody, source),
             )
             ImportOutputParser.tag(protagonistOut, "prologue")?.let {
-                workspace.write(dir, "prologue.md", ImportDocs.plain(it, source))
+                // 첫 줄 인물 태그를 인물 파일명으로 맞춘다(T29). written: 화면 이름 → 파일명
+                workspace.write(dir, "prologue.md", ImportDocs.prologue(it, source, written))
             }
 
             // 4. 이미지 카탈로그 (LLM 호출 없음)

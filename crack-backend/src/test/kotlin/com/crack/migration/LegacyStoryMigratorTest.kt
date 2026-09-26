@@ -174,7 +174,8 @@ class LegacyStoryMigratorTest {
         assertEquals("# 설월\n\n스토리에서 갱신된 설월\n", Files.readString(dir.resolve("characters/설월.md")))
         assertEquals(fixture("characters/무극.md"), Files.readString(dir.resolve("characters/무극.md")))
         assertEquals(fixture("characters/protagonist.md"), Files.readString(dir.resolve("characters/protagonist.md")))
-        for (name in StoryFiles.COPIED_FILES) {
+        // 픽스처에 없는 선택 문서(settings.json)는 원본에 없으니 복사되지 않는다
+        for (name in StoryFiles.COPIED_FILES.filter { Files.exists(SampleScenario.source.resolve(it)) }) {
             assertEquals(fixture(name), Files.readString(dir.resolve(name)), name)
         }
         assertFalse(Files.exists(dir.resolve("images.md")), "images.md는 복사하지 않는다")

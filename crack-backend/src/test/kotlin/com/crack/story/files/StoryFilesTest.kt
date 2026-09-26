@@ -2,6 +2,7 @@ package com.crack.story.files
 
 import com.crack.memory.docs.MemoryDocs
 import com.crack.memory.docs.StoryState
+import com.crack.story.settings.StorySettings
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -34,6 +35,25 @@ class StoryFilesTest {
         }
         assertFalse(Files.exists(storyDir.resolve("images.md")), "images.md는 원본을 참조한다")
         assertFalse(Files.exists(storyDir.resolve("stories")), "stories/는 복사하지 않는다")
+        assertFalse(
+            Files.exists(storyDir.resolve(StorySettings.FILE_NAME)),
+            "원본에 없는 settings.json은 만들지 않는다",
+        )
+    }
+
+    @Test
+    fun `원본에 settings_json이 있으면 스토리로 복사한다`() {
+        val scenarioDir = scenario()
+        val json = """{"responseChars": {"min": 1200, "max": 2200}}"""
+        Files.writeString(scenarioDir.resolve(StorySettings.FILE_NAME), json)
+        val storyDir = storyDir(scenarioDir)
+
+        StoryFiles.initFromScenario(scenarioDir, storyDir)
+
+        assertEquals(json, Files.readString(storyDir.resolve(StorySettings.FILE_NAME)))
+        // 스토리 폴더의 파일만 읽는다(D12): 스토리에서 고쳐도 원본은 그대로다
+        Files.writeString(storyDir.resolve(StorySettings.FILE_NAME), """{"responseChars": {"min": 300, "max": 400}}""")
+        assertEquals(json, Files.readString(scenarioDir.resolve(StorySettings.FILE_NAME)))
     }
 
     @Test

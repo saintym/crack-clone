@@ -1,6 +1,7 @@
 package com.crack.document.story
 
 import com.crack.global.exception.BadRequestException
+import com.crack.story.settings.StorySettings
 import java.nio.file.Files
 import java.nio.file.LinkOption
 import java.nio.file.Path
@@ -9,7 +10,7 @@ import java.nio.file.Path
  * 스토리 문서 API의 경로 화이트리스트 (DESIGN.md §9).
  *
  * 허용: `world.md`, `scenario.md`, `prologue.md`, `characters/{이름}.md`(주인공 `characters/protagonist.md` 포함),
- * `chronicle.md`, `user_note.md`, `keywords.md`, `commands.md`.
+ * `chronicle.md`, `user_note.md`, `keywords.md`, `commands.md`, `settings.json`(§6.4).
  * `..`, `.`, 절대 경로, 역슬래시, 빈 조각, 숨김 파일, 그 밖의 모든 경로는 거부한다.
  */
 object StoryDocumentPaths {
@@ -25,6 +26,9 @@ object StoryDocumentPaths {
         USER_NOTE("user_note"),
         KEYWORDS("keywords"),
         COMMANDS("commands"),
+
+        /** `settings.json` (§6.4 응답 분량). 유일한 비마크다운 문서다. */
+        SETTINGS("settings"),
     }
 
     const val CHARACTERS_DIR = "characters"
@@ -40,6 +44,7 @@ object StoryDocumentPaths {
         "user_note.md" to Kind.USER_NOTE,
         "keywords.md" to Kind.KEYWORDS,
         "commands.md" to Kind.COMMANDS,
+        StorySettings.FILE_NAME to Kind.SETTINGS,
     )
 
     data class DocPath(val path: String, val kind: Kind)

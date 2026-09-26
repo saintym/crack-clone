@@ -29,6 +29,7 @@
   keywords.md            (선택) 키워드북
   commands.md            (선택) 사용자 정의 / 명령
   images.md              (선택) 이미지 카탈로그 — 스토리에서 복사하지 않고 원본을 참조
+  settings.json          (선택) 시나리오별 조정값 (§6.4 응답 분량). 있으면 스토리로 복사한다
 
 {data-path}/{scenario.name}/stories/{story.dir_name}/   ← 스토리 (원본을 통째로 복사)
   story.json             { "scenarioName", "copiedAt", "formatVersion": 2 }
@@ -36,6 +37,7 @@
   characters/{이름}.md       ← 원본 + "## 기억" 섹션
   characters/protagonist.md  ← 원본 + "## 변화 기록" 섹션
   keywords.md, commands.md
+  settings.json          (선택) 원본에 있었으면 복사된 조정값 (§6.4)
   chronicle.md           시나리오 연대기
   user_note.md           유저노트 (구 memory/must_remember.md)
   directives.json        지속 OOC 지시
@@ -276,7 +278,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 
   | slot | order | name | 내용 |
   |---|---|---|---|
-  | BASE | 0 | `base` | 기본 규칙 + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그·인물 태그 §5.3) |
+  | BASE | 0 | `base` | 기본 규칙 + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그·인물 태그 §5.3, 응답 분량 §6.4) |
   | WORLD | 0 | `world` | `world.md` |
   | SCENARIO | 0 | `scenario` | `scenario.md` |
   | SCENARIO | 100 | `chronicle` | `chronicle.md`의 `## 장 요약` + 최근 회차 원문. 최신 회차부터 거꾸로 `crack.memory.budget.chronicle` 안에서 담고(가장 최근 회차 하나는 넘어도 넣는다), 파일 순서(오래된 것부터)로 쓴다 |
@@ -313,6 +315,25 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
     systemPrompt, messages: [{role, content}] }         // messages는 [지시]가 붙은 최종 형태
   ```
   `totalChars = systemChars + messageChars`. 글자 수는 Kotlin `String.length`(UTF-16 코드 유닛)다.
+
+### 6.4 응답 분량 (T29, D33)
+`BaseContributor`의 출력 형식에 목표 분량 한 줄이 들어간다. 하한만 있으면 응답이 턴마다 길어지므로(실측 720자 → 2,032자, 지연 17.5초 → 35.5초) **상한을 함께 준다.**
+
+```
+- 분량은 한 응답에 약 800~1,500자를 목표로 한다. 장면이 짧게 끝나야 할 때는 더 짧아도 되지만, 2,000자를 넘기지 마라.
+```
+
+- 전역 기본값: `crack.prompt.response-chars.min`(기본 800), `crack.prompt.response-chars.max`(기본 1500).
+- 절대 상한("넘기지 마라")은 `max + 500`으로 만든다. 따로 설정하지 않는다.
+- **시나리오·스토리별 조정**: 스토리 폴더의 `settings.json`(선택)이 전역 기본값을 덮어쓴다.
+  ```json
+  { "responseChars": { "min": 1200, "max": 2200 } }
+  ```
+  - 시나리오 원본에 `settings.json`이 있으면 스토리를 만들 때 복사한다(`StoryFiles.COPIED_FILES`). 플레이 중에는 스토리 폴더의 파일만 읽는다(D12).
+  - 모르는 필드는 무시한다. 파일이 없거나 `responseChars`가 없으면 전역 기본값을 쓴다.
+  - 값이 깨졌거나(JSON 오류) 범위가 이상하면(`min` ≤ 0, `min` > `max`, `max` > 20000) **경고 로그를 남기고 전역 기본값**을 쓴다. 턴은 실패시키지 않는다.
+  - 읽는 코드는 `com.crack.story.settings.StorySettings`(순수 파일 라이브러리)다. 매 턴 파일 하나를 읽는다(LLM 호출 없음).
+  - 기억 패널 → "이 스토리의 설정" → **응답 분량**에서 고칠 수 있다(스토리 문서 API 화이트리스트, §9).
 
 ## 7. 기억 시스템 v2 (T05 포맷, T14 파이프라인)
 
@@ -564,7 +585,7 @@ class KeywordMatcher {
 
 | Method | Path | 설명 |
 |---|---|---|
-| GET | `/api/stories/{id}/documents` | 문서 목록 `[{path, kind, size}]` (world, scenario, prologue, protagonist, characters, chronicle, user_note, keywords, commands) |
+| GET | `/api/stories/{id}/documents` | 문서 목록 `[{path, kind, size}]` (world, scenario, prologue, protagonist, characters, chronicle, user_note, keywords, commands, settings) |
 | GET | `/api/stories/{id}/documents/content?path=characters/설월.md` | 내용 |
 | PUT | `/api/stories/{id}/documents/content?path=…` | 저장. body `{content}` |
 
@@ -572,12 +593,13 @@ class KeywordMatcher {
 - **목록 항목 `{path, kind, size}`**(T08에서 확정)
   - `kind`는 위 이름을 그대로 쓴다. 인물 파일은 `characters`다.
   - `size`는 바이트 수다.
-  - 순서는 world → scenario → prologue → protagonist → characters(이름순) → chronicle → user_note → keywords → commands이고, 실제로 있는 파일만 나온다.
+  - 순서는 world → scenario → prologue → protagonist → characters(이름순) → chronicle → user_note → keywords → commands → settings이고, 실제로 있는 파일만 나온다.
+  - `settings`는 `settings.json`이다(§6.4). 유일한 비마크다운 문서이므로 프론트는 마크다운으로 렌더링하지 않고 원문 그대로 보여 준다.
 - **GET·PUT content 응답**은 `{path, kind, content}`다. 없는 문서 GET은 404, PUT은 없던 문서도 만든다(새 인물 추가 가능).
 - `_legacy` 스토리(T09 이전 전)는 읽기만 되고 PUT은 400이다. 폴더가 곧 시나리오 원본이기 때문이다.
 - 스토리 폴더는 `StoryDirs.locate(storyId).dir`로 찾는다. 복사 로직은 `StoryFiles.initFromScenario`, 메타는 `StoryMeta`.
 - 테스트 픽스처는 `src/test/resources/fixtures/sample-scenario/`(설월·무극·주인공)이고, `SampleScenario.copyTo(dir)`로 쓴다.
-- 시나리오 원본 편집 API(`/api/scenarios/{name}/documents`)는 그대로 두고, `prologue`, `keywords`, `commands`, `images` 타입을 추가한다.
+- 시나리오 원본 편집 API(`/api/scenarios/{name}/documents`)는 그대로 두고, `prologue`, `keywords`, `commands`, `images`, `settings` 타입을 추가한다.
 
 ## 10. 프론트엔드 구조 (T04 이후)
 
@@ -652,8 +674,8 @@ event:error  data:생성 실패 문구 (어느 단계에서 실패했는지 포�
 
 1. `world.md`, `scenario.md`, `keywords.md` — LLM 1회
 2. `characters/{이름}.md` — 페이지의 인물 전원. `crack.import.characters-per-batch`(기본 4)씩 묶고 `crack.import.concurrency`(기본 3)로 동시 실행
-3. `characters/protagonist.md`, `prologue.md` — 사용자 답변 반영, LLM 1회
-4. `images.md` — 인물 이미지 URL을 `{이름}_기본`으로 등록(T27 규칙). 인물과 맞지 않는 이미지는 `<!-- -->`로 감싸 장면 태그 후보로 남긴다. LLM 호출 없음
+3. `characters/protagonist.md`, `prologue.md` — 사용자 답변 반영, LLM 1회. `prologue.md` **첫 줄에는 `[인물: 이름]` 태그**를 쓰게 한다(§5.3, 첫 장면에 인물이 없으면 생략). 첫 메시지에도 인물 이미지가 붙게 하려는 것이다(T29)
+4. `images.md` — 인물 이미지 URL을 `{이름}_기본`으로 등록(T27 규칙). 인물과 맞지 않는 이미지는 **줄마다 따로** 주석으로 남긴다(T29, BUG-024): `<!-- 미분류 이미지 1: https://… — 쓰려면 주석을 풀고 태그 이름을 정하세요 -->`. 같은 태그 이름(`태그를_정하세요`)을 여러 줄에 쓰면 주석을 풀 때 첫 줄만 인식되므로 태그 이름을 넣지 않는다. LLM 호출 없음
 
 - **모든 AI 호출은 `AiGateway`를 거친다.** 추출 컨텍스트는 시스템 프롬프트에 두고 단계별 지시만 유저 메시지로 보낸다(프롬프트 접두사를 같게 유지해 캐시를 살린다).
 - **원자적 생성**: `{data-path}/.import-tmp/{jobId}`에 다 만든 뒤 시나리오 폴더로 `ATOMIC_MOVE`하고 DB에 등록한다. 중간 실패나 DB 등록 실패면 임시 폴더(와 옮긴 폴더)를 지워 흔적을 남기지 않는다. 임시 폴더 이름이 `.`으로 시작하므로 시나리오로 잡히지 않는다.

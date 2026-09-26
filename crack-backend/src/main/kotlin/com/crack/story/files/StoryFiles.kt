@@ -3,6 +3,7 @@ package com.crack.story.files
 import com.crack.memory.docs.AtomicFiles
 import com.crack.memory.docs.MemoryDocs
 import com.crack.memory.docs.StoryState
+import com.crack.story.settings.StorySettings
 import org.slf4j.LoggerFactory
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
@@ -27,8 +28,13 @@ object StoryFiles {
     const val DIRECTIVES_FILE = "directives.json"
     const val CHARACTERS_DIR = MemoryDocs.CHARACTERS_DIR
 
-    /** 원본에서 복사하는 최상위 문서. 없으면 건너뛴다. `images.md`는 원본을 참조하므로 복사하지 않는다(§8.5). */
-    val COPIED_FILES = listOf("world.md", "scenario.md", "prologue.md", "keywords.md", "commands.md")
+    /**
+     * 원본에서 복사하는 최상위 문서. 없으면 건너뛴다. `images.md`는 원본을 참조하므로 복사하지 않는다(§8.5).
+     * `settings.json`(선택, §6.4)은 스토리마다 따로 조정할 수 있어야 하므로 복사한다.
+     */
+    val COPIED_FILES = listOf(
+        "world.md", "scenario.md", "prologue.md", "keywords.md", "commands.md", StorySettings.FILE_NAME,
+    )
 
     const val USER_NOTE_INITIAL = "# 유저노트\n\n"
     const val CHRONICLE_INITIAL = "# 연대기\n"
