@@ -4,6 +4,7 @@ import com.crack.document.dto.DocumentResponse
 import com.crack.global.config.DataPaths
 import com.crack.global.exception.BadRequestException
 import com.crack.global.exception.NotFoundException
+import com.crack.story.settings.StorySettings
 import org.springframework.stereotype.Service
 import java.nio.file.Files
 import java.nio.file.Path
@@ -17,7 +18,10 @@ class DocumentService(
         const val CHARACTERS_DIR = "characters"
     }
 
-    /** 시나리오 원본 문서 타입 (DESIGN.md §2, §9). 선택 문서(prologue, keywords, commands, images)는 없을 수 있다. */
+    /**
+     * 시나리오 원본 문서 타입 (DESIGN.md §2, §9).
+     * 선택 문서(prologue, keywords, commands, images, settings)는 없을 수 있다.
+     */
     enum class DocumentType(val fileName: String) {
         WORLD("world.md"),
         SCENARIO("scenario.md"),
@@ -25,7 +29,10 @@ class DocumentService(
         PROLOGUE("prologue.md"),
         KEYWORDS("keywords.md"),
         COMMANDS("commands.md"),
-        IMAGES("images.md")
+        IMAGES("images.md"),
+
+        /** 시나리오별 조정값(§6.4). 있으면 스토리를 만들 때 복사된다. */
+        SETTINGS(StorySettings.FILE_NAME)
     }
 
     fun readDocument(scenarioName: String, type: DocumentType): DocumentResponse {
