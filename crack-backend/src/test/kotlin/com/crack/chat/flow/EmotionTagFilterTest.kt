@@ -217,6 +217,72 @@ class EmotionTagFilterTest {
         assertThat(parsed.body).isEqualTo("본문")
     }
 
+    // ── 앞머리 회수 (BUG-025, T33) ──
+
+    @Test
+    fun `태그 앞에 메타 문장이 있으면 그 줄까지 버리고 태그를 회수한다`() {
+        val text = "This is a roleplay continuation. Let me write Sakura's response in character.\n\n" +
+            "---\n\n[감정: 수줍음, 걱정] [인물: 사쿠라]\n\n*사쿠라의 손이 한 박자 멈췄다.*"
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags.emotion).isEqualTo("수줍음, 걱정")
+        assertThat(parsed.tags.speaker).isEqualTo("사쿠라")
+        assertThat(parsed.body).isEqualTo("*사쿠라의 손이 한 박자 멈췄다.*")
+    }
+
+    @Test
+    fun `태그 줄에 본문이 섞여 있으면 앞머리로 보지 않는다`() {
+        val text = "머리말\n\n[인물: 설월] 그녀가 웃었다.\n다음 줄"
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags).isEqualTo(ResponseTags.NONE)
+        assertThat(parsed.body).isEqualTo(text)
+    }
+
+    @Test
+    fun `버릴 앞머리가 너무 길면 본문으로 보고 건드리지 않는다`() {
+        val long = "가".repeat(EmotionTagFilter.MAX_PREAMBLE_CHARS + 50)
+        val text = "$long\n[인물: 설월]\n본문"
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags).isEqualTo(ResponseTags.NONE)
+        assertThat(parsed.body).isEqualTo(text)
+    }
+
+    @Test
+    fun `앞머리가 여러 줄이어도 상한 안이면 회수한다`() {
+        val text = "한 줄\n두 줄\n세 줄\n[감정: 분노]\n본문"
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags.emotion).isEqualTo("분노")
+        assertThat(parsed.body).isEqualTo("본문")
+    }
+
+    @Test
+    fun `태그가 너무 뒤에 있으면 회수하지 않는다`() {
+        val text = (1..EmotionTagFilter.MAX_PREAMBLE_LINES + 2).joinToString("\n") { "줄 $it" } +
+            "\n[인물: 설월]\n본문"
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags).isEqualTo(ResponseTags.NONE)
+        assertThat(parsed.body).isEqualTo(text)
+    }
+
+    @Test
+    fun `태그가 아예 없는 응답은 그대로 둔다`() {
+        val text = "머리말입니다.\n\n본문이 이어집니다. [무언가] 대괄호도 있습니다."
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags).isEqualTo(ResponseTags.NONE)
+        assertThat(parsed.body).isEqualTo(text)
+    }
+
     @Test
     fun `에러는 그대로 전달한다`() {
         val recorder = Recorder()
