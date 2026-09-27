@@ -27,6 +27,8 @@ interface TaggedResponseListener {
  * - 태그 뒤에 본문이 같은 줄에 붙어 있어도 **태그만 떼고** 본문은 남긴다. 태그는 어떤 경우에도 사용자에게 보이지 않는다.
  * - 태그를 하나라도 뗐으면 뒤따르는 공백·빈 줄도 버린다.
  * - 태그가 아니면 버퍼를 원문 그대로 흘리고 이후는 통과시킨다.
+ * - **태그가 맨 앞에 없는 경우**(AI가 메타 문장을 먼저 뱉는 사고, BUG-025)는 [parse]가 저장 시점에 회수한다.
+ *   스트리밍 화면에는 잠깐 보이지만 저장되는 본문과 `speaker`는 깨끗하다.
  *
  * 흘린 delta를 이어 붙이면 [parse]`(fullText).body`와 같다(fullText가 delta의 합일 때).
  * 저장에는 [onComplete]로 받은 fullText를 [parse]한 결과를 쓴다.
@@ -113,11 +115,63 @@ class EmotionTagFilter(private val delegate: TaggedResponseListener) : StreamLis
         private val PARTIAL_TAG =
             Regex("""^\[\s*(?:감(?:정\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?|인(?:물\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?)?$""")
 
-        /** 전체 응답을 태그 값과 본문으로 나눈다. 태그가 없으면 원문 그대로. */
+        /** 앞머리 회수(BUG-025)에서 훑어볼 줄 수 상한 */
+        const val MAX_PREAMBLE_LINES = 6
+
+        /** 앞머리 회수에서 버릴 수 있는 글자 수 상한. 넘으면 본문으로 보고 건드리지 않는다 */
+        const val MAX_PREAMBLE_CHARS = 300
+
+        /**
+         * 전체 응답을 태그 값과 본문으로 나눈다. 태그가 없으면 원문 그대로.
+         *
+         * 태그가 맨 앞에 없으면 [recoverAfterPreamble]로 한 번 더 찾는다(BUG-025).
+         */
         fun parse(text: String): Parsed {
             val scan = scanTags(text)
-            if (scan.count == 0) return Parsed(ResponseTags.NONE, text)
-            return Parsed(scan.tags, text.substring(scan.end).trimStart())
+            if (scan.count > 0) return Parsed(scan.tags, text.substring(scan.end).trimStart())
+            return recoverAfterPreamble(text) ?: Parsed(ResponseTags.NONE, text)
+        }
+
+        /**
+         * AI가 태그보다 **먼저** 다른 것을 뱉었을 때의 안전망 (BUG-025).
+         *
+         * 앞쪽 [MAX_PREAMBLE_LINES]줄·[MAX_PREAMBLE_CHARS]자 안에서 **태그만으로 이루어진 줄**을 찾으면,
+         * 그 줄까지를 앞머리로 보고 통째로 버린다. 실제로 겪은 사고는 이런 모양이었다.
+         *
+         * ```
+         * This is a roleplay continuation. Let me write Sakura's response in character.
+         *
+         * [감정: 수줍음] [인물: 사쿠라]
+         *
+         * (본문)
+         * ```
+         *
+         * 조건을 좁게 잡았다. 줄 전체가 태그여야 하고(본문 중간의 대괄호는 건드리지 않는다),
+         * 버리는 양이 [MAX_PREAMBLE_CHARS]자를 넘으면 포기한다. 본문을 지우는 쪽이 태그가 보이는 쪽보다 나쁘다.
+         *
+         * 스트리밍 중에는 이미 흘려보낸 delta를 되돌릴 수 없으므로 화면에는 잠깐 보인다.
+         * 저장되는 본문과 `speaker`는 이 회수를 거친 값이다.
+         */
+        private fun recoverAfterPreamble(text: String): Parsed? {
+            var lineStart = 0
+            var lines = 0
+            while (lineStart < text.length && lines < MAX_PREAMBLE_LINES && lineStart <= MAX_PREAMBLE_CHARS) {
+                val newline = text.indexOf('\n', lineStart)
+                val lineEnd = if (newline < 0) text.length else newline
+                val line = text.substring(lineStart, lineEnd).trim()
+                if (line.isNotEmpty()) {
+                    val scan = scanTags(line)
+                    // 줄 전체가 태그여야 한다. 태그 뒤에 글자가 남으면 본문이 섞인 줄이다
+                    if (scan.count > 0 && line.substring(scan.end).isBlank()) {
+                        val rest = if (newline < 0) "" else text.substring(newline + 1)
+                        return Parsed(scan.tags, rest.trimStart())
+                    }
+                }
+                if (newline < 0) break
+                lineStart = newline + 1
+                lines++
+            }
+            return null
         }
 
         /** 앞에서부터 태그를 연달아 읽는다. [Scan.end]는 마지막 태그 끝(본문 시작 전)이다. */
