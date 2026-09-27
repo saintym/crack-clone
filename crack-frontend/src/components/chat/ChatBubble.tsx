@@ -74,7 +74,8 @@ function CatalogImage({ entry }: { entry: ImageEntry }) {
  * 맨 위에 보여 준다(§8.5, D31). AI가 본문 태그를 빠뜨린 턴과 옛 메시지를 위한 것이다.
  *
  * [mode]가 `novel`이면 말풍선과 좌우 정렬을 버리고 한 흐름으로 읽히게 한다(D35).
- * 사용자 입력은 왼쪽 가는 선과 흐린 글자색으로만 구분한다.
+ * 사용자 입력과 AI 응답을 글자 모양으로 구분하지 않는다. 구분은 [MessageList]가 턴 사이에 넣는
+ * 가로 구분선(`---`)이 맡는다(D36).
  */
 export default function ChatBubble({ role, content, speaker, speakerVariant, isStreaming, mode = 'bubble' }: ChatBubbleProps) {
   const isUser = role === 'USER';
@@ -86,12 +87,13 @@ export default function ChatBubble({ role, content, speaker, speakerVariant, isS
   const hasBodyImage = segments?.some((s) => s.type === 'image' && catalog?.has(s.tag)) ?? false;
   const autoImage = hasBodyImage ? null : resolveCharacterImage(catalog, speaker, speakerVariant);
 
-  // 소설형: 폭을 꽉 채우고 배경과 테두리를 없앤다. 사용자 입력만 왼쪽에 가는 선을 둬 구분한다.
+  // 소설형: 폭을 꽉 채우고 배경·테두리·좌우 정렬을 없앤다.
+  // 사용자 입력과 AI 응답을 글자 모양으로 구분하지 않는다 — 구분은 MessageList가 넣는 구분선이 한다(D36).
   const outer = novel
     ? 'block'
     : `flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`;
   const inner = novel
-    ? `w-full ${isUser ? 'border-l-2 border-accent/50 pl-3.5 py-0.5 text-text-secondary' : 'text-text-primary'}`
+    ? 'w-full text-text-primary'
     : `max-w-[85%] rounded-2xl px-4 py-3.5 ${
         isUser
           ? 'bg-user-bubble text-text-primary rounded-br-sm'

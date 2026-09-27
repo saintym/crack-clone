@@ -621,7 +621,7 @@ src/components/chat/MessageList.tsx
 src/components/chat/ChatBubble.tsx  마크다운 렌더링 (T20에서 이미지 태그 처리)
 src/components/chat/MessageMenu.tsx 수정, 삭제, 분기, 재생성, 이어쓰기
 src/components/chat/BranchDialog.tsx 분기 제목 입력 하단 시트
-src/components/chat/ChatInput.tsx   (T18에서 / 자동완성)
+src/components/chat/ChatInput.tsx   (T18에서 / 자동완성) · Enter는 줄바꿈, 전송은 버튼만 (T32, D36)
 src/components/chat/StorySidebar.tsx
 src/components/panels/SidePanel.tsx 탭을 props로 받는 드로어 (PC 오른쪽, 모바일 하단 시트, 배경을 덮지 않음)
 src/components/panels/…             T15 기억 패널, T18 지시 패널, T19 상태 패널
@@ -638,11 +638,12 @@ src/components/panels/…             T15 기억 패널, T18 지시 패널, T19 
 | 정렬 | AI 왼쪽, 사용자 오른쪽 | 전부 같은 흐름. 좌우 정렬 없음 |
 | 배경 | 말풍선 배경과 테두리 | 없음 |
 | 폭 | 각 말풍선 최대 85% | 본문 전체를 `max-w-[44rem]`로 가운데 정렬 |
-| 사용자 입력 | 말풍선 색으로 구분 | **왼쪽 2px 강조선 + 흐린 글자색**으로만 구분 |
+| 사용자 입력 | 말풍선 색으로 구분 | 글자 모양으로 구분하지 않는다. **턴 사이 가로 구분선(`---`)으로만 나눈다**(T32, D36) |
 | 줄 간격 | 1.7 | 1.85 (읽기용) |
 | 메시지 메뉴 | 항상 보임 | 흐리게 두고(35%) 올리거나 포커스하면 진해짐 |
 
 - 모드는 `ChatBubble`과 `MessageList`에 `mode` prop으로 내려간다. 인라인 편집기와 재생성 지시 입력도 소설형에서는 폭을 채운다.
+- **턴 구분선**은 `MessageList`의 `TurnDivider`가 첫 턴을 제외한 모든 턴 위에 넣는다. 스트리밍 중인 응답과 보내는 중인 사용자 입력 앞에도 같이 넣는다.
 - **인물 이미지(§8.5)는 두 모드에서 똑같이 동작한다.** 소설형에서는 본문 폭을 그대로 써서 더 크게 보인다.
 
 ## 11. URL에서 시나리오 가져오기 (T28, D32)
