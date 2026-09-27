@@ -26,6 +26,14 @@ interface MessageListProps {
 
 const isComposing = (e: React.KeyboardEvent) => e.nativeEvent.isComposing || e.keyCode === 229;
 
+/**
+ * 소설형에서 턴 사이를 가르는 가로선 (마크다운 `---`, D36).
+ * 사용자 입력과 AI 응답을 글자 모양으로 구분하지 않고 이 선으로만 나눈다.
+ */
+function TurnDivider() {
+  return <hr className="border-0 border-t border-border/60 mb-6" />;
+}
+
 /** 메시지 목록, 스트리밍 중인 응답, 인라인 편집기와 재생성 지시 입력 */
 export default function MessageList({
   messages, stream, locked, onSelectVariant, onRegenerate, onContinue, onBranch, onEditSave, onDelete, mode,
@@ -87,18 +95,24 @@ export default function MessageList({
         </div>
       )}
 
-      {messages.map((msg) => {
+      {messages.map((msg, index) => {
         const isUser = msg.role === 'USER';
         const isLast = msg.id === last?.id;
 
         // 재생성 중에는 원래 답변 자리에 새 응답을 보인다. 실패하면 스트림이 사라지고 원래 답변이 다시 보인다.
         if (streamingInPlace && stream?.targetId === msg.id) {
-          return <ChatBubble key={msg.id} role="ASSISTANT" content={stream.content} isStreaming mode={mode} />;
+          return (
+            <div key={msg.id}>
+              {novel && index > 0 && <TurnDivider />}
+              <ChatBubble role="ASSISTANT" content={stream.content} isStreaming mode={mode} />
+            </div>
+          );
         }
 
         const isEditing = editing?.id === msg.id;
         return (
           <div key={msg.id}>
+            {novel && index > 0 && <TurnDivider />}
             {isEditing ? (
               <div className={novel ? 'block' : `flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
                 <div className={novel ? 'w-full' : 'max-w-[85%] w-full'}>
@@ -214,10 +228,18 @@ export default function MessageList({
         );
       })}
 
-      {stream?.pendingUser && <ChatBubble role="USER" content={stream.pendingUser} mode={mode} />}
+      {stream?.pendingUser && (
+        <div>
+          {novel && messages.length > 0 && <TurnDivider />}
+          <ChatBubble role="USER" content={stream.pendingUser} mode={mode} />
+        </div>
+      )}
 
       {stream && !streamingInPlace && (
-        <ChatBubble role="ASSISTANT" content={stream.content} isStreaming mode={mode} />
+        <div>
+          {novel && (messages.length > 0 || stream.pendingUser) && <TurnDivider />}
+          <ChatBubble role="ASSISTANT" content={stream.content} isStreaming mode={mode} />
+        </div>
       )}
 
       <div ref={messagesEndRef} />
