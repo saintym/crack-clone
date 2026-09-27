@@ -18,7 +18,7 @@ interface ChatInputProps {
    * @returns 유저 메시지가 저장되었으면 true. false면 입력창에 내용을 되돌린다
    */
   onSend: (message: string, command?: string) => Promise<boolean>;
-  /** 빈 입력창에서 Enter 또는 버튼으로 이어쓰기 */
+  /** 빈 입력창에서 전송 버튼을 누르면 이어쓰기 */
   onContinue: () => void;
   /** `/ooc`만 입력했을 때: 지시 패널을 연다 */
   onOpenDirectives: () => void;
@@ -58,7 +58,11 @@ function describeResult(result: SystemCommandResult): string {
 }
 
 /**
- * 메시지 입력창과 상황서술 토글. 입력이 비어 있으면 Enter·버튼이 이어쓰기가 된다.
+ * 메시지 입력창과 상황서술 토글. 입력이 비어 있으면 전송 버튼이 이어쓰기가 된다.
+ *
+ * **Enter는 줄바꿈이다. 전송은 버튼으로만 한다**(D36). 한 턴이 여러 줄인 경우가 잦고,
+ * 한글 조합 확정용 Enter가 전송으로 새는 사고가 반복됐다.
+ *
  * `/`로 시작하면 명령 자동완성을 띄우고(방향키·Enter·Tab 선택, Esc 닫기), 보낼 때 명령을 나눠 처리한다(§8.2).
  * - 시스템 명령은 REST로 실행하고 결과를 입력창 위 토스트로 알린다. `/ooc`만 입력하면 지시 패널을 연다
  * - 사용자 정의 명령은 `command`를 붙여 일반 전송과 같이 보낸다
@@ -185,7 +189,7 @@ export default function ChatInput({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    // 한글 조합 중 Enter는 무시한다 (조합 확정용 Enter가 빈 입력 이어쓰기로 새지 않게)
+    // 한글 조합 중 Enter는 무시한다 (조합 확정용 Enter가 명령 고르기로 새지 않게)
     if (e.nativeEvent.isComposing || e.keyCode === 229) return;
 
     if (paletteOpen) {
@@ -202,26 +206,22 @@ export default function ChatInput({
         return;
       }
       if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey)) {
-        // 이름을 다 입력한 상태의 Enter는 바로 실행한다 (`/기록` + Enter). 그 밖에는 이름을 채운다
+        e.preventDefault();
+        // 이름을 다 입력한 상태면 채울 것이 없으므로 목록만 닫는다 (전송은 버튼으로만 한다, D36)
         const typedFully = input.slice(1).toLowerCase() === current.name.toLowerCase();
-        if (!(e.key === 'Enter' && typedFully)) {
-          e.preventDefault();
-          pick(current);
-          return;
-        }
+        if (typedFully) setPaletteClosed(true);
+        else pick(current);
+        return;
       }
     }
 
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      submit();
-    }
+    // Enter는 줄바꿈이다. 전송은 오른쪽 버튼으로만 한다 (D36).
   };
 
   // 모바일 폭(420px 이하)에서도 한 줄에 들어가게 짧게 쓴다. 넘치면 말줄임(placeholder:truncate)
   let placeholder = narrationMode ? '상황을 서술하세요' : '메시지 · / 명령';
   if (locked) placeholder = streaming ? '응답을 받는 중…' : '응답을 생성하는 중…';
-  else if (canContinue && !narrationMode) placeholder = '메시지 · 빈 Enter: 이어쓰기';
+  else if (canContinue && !narrationMode) placeholder = '메시지 · 빈 칸으로 전송: 이어쓰기';
 
   return (
     <div className="safe-bottom shrink-0 border-t border-border/50 bg-bg-secondary/80 backdrop-blur-md px-4 py-3">
