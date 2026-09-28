@@ -53,7 +53,7 @@ class ImagesContributor(
 - 같은 인물이 연달아 말할 때만 생략합니다.
 - **같은 인물이라도 변형이 바뀌면 새로 넣습니다.** 감정이 바뀌거나 자세·행동이 바뀌면 그때가 새로 넣을 자리입니다.
 - 한 응답에 {{MAX}}개까지만 넣으세요. 그보다 많이 바뀌면 중요한 순간만 고릅니다.
-- 아래 목록에 있는 이름과 변형만 쓰고, 태그는 밑줄로 이어 씁니다(목록에 `설월 — 기본, 분노`가 있으면 `{{img:설월_분노}}`).
+- 아래 목록에 있는 이름과 변형만 쓰고, 태그는 **이름과 변형을 밑줄로 이어** 씁니다(이름 `설월`, 변형 `분노` → `{{img:설월_분노}}`).
 - **변형은 감정일 수도, 상황이나 자세일 수도 있습니다.** 괄호 안의 설명을 보고 **지금 장면에 맞는 것**을 고르세요. 감정어만 찾지 마세요.
 - 마땅한 변형이 없으면 `{{img:이름_기본}}`을 씁니다.
 - 아래에 없는 인물, 주인공, 인물이 나오지 않는 장면에는 넣지 않습니다.
@@ -85,16 +85,18 @@ class ImagesContributor(
             if (budget == 0 || entries.isEmpty()) return null
 
             // **걸르기를 자르기보다 먼저 한다**(T40). 파일 순서로 먼저 자르면, 파일 뒤쪽에 있는 인물은
-            // 활성이어도 변형이 하나도 프롬프트에 들어가지 않는다. 인물 변형이 먼저 예산을 쓴다.
+            // 활성이어도 변형이 하나도 프롬프트에 들어가지 않는다.
             val activePrefixes = activeCharacters.map { "${it}_" }
             val characterEntries = entries
                 .filter { e -> activePrefixes.any { e.tag.startsWith(it) && e.tag.length > it.length } }
-                .take(budget)
+
+            // 예산은 **실제로 나열되는 변형 수**로 센다(T44). 변형 집합이 같은 인물은 묶이므로,
+            // 같은 예산으로 훨씬 많은 인물을 담을 수 있다.
+            val characterBlock = renderCharacters(characterEntries, activeCharacters, maxPerResponse, budget)
             val sceneEntries = entries
                 .filter { e -> characterNames.none { e.tag.startsWith("${it}_") } }
-                .take(budget - characterEntries.size)
+                .take(budget - (characterBlock?.used ?: 0))
 
-            val characterBlock = renderCharacters(characterEntries, activeCharacters, maxPerResponse)
             val sceneBlock = if (sceneEntries.isEmpty()) null else {
                 val list = sceneEntries.joinToString("\n") { e ->
                     if (e.description.isEmpty()) "- ${e.tag}" else "- ${e.tag}: ${e.description}"
@@ -102,30 +104,79 @@ class ImagesContributor(
                 "$SCENE_GUIDE\n\n쓸 수 있는 장면 태그:\n$list"
             }
 
-            val blocks = listOfNotNull(characterBlock, sceneBlock)
+            val blocks = listOfNotNull(characterBlock?.text, sceneBlock)
             if (blocks.isEmpty()) return null
             return "=== 이미지 ===\n" + blocks.joinToString("\n\n")
         }
 
         /** 활성 인물별로 쓸 수 있는 변형 이름. 카탈로그에 항목이 없는 인물은 뺀다. */
+        /**
+         * 활성 인물의 변형 목록. **변형 집합이 같은 인물은 한 줄로 묶는다**(T44).
+         *
+         * 일괄 등록(§8.6)으로 만든 카탈로그는 인물마다 변형이 **똑같다.** 그때 인물별로 19변형을 되풀이하면
+         * 6명이면 114항목이 되는데, 묶으면 `변형 19개 + 이름 6개`로 끝난다. 뜻도 더 분명해진다 —
+         * "모든 인물이 같은 변형을 가진다"를 AI가 바로 안다.
+         *
+         * 집합이 다른 인물이 섞여 있으면 **집합마다 한 줄**이 된다. 전부 다르면 예전처럼 인물별 한 줄이다.
+         */
         private fun renderCharacters(
             entries: List<ImageEntry>,
             activeCharacters: List<String>,
             maxPerResponse: Int,
-        ): String? {
-            val lines = activeCharacters.mapNotNull { name ->
+            budget: Int,
+        ): CharacterBlock? {
+            // 인물 → (변형 이름, 설명) 목록 (`기본`을 앞으로)
+            val byName = LinkedHashMap<String, List<Pair<String, String>>>()
+            for (name in activeCharacters) {
                 val prefix = "${name}_"
-                val variants = entries.filter { it.tag.startsWith(prefix) && it.tag.length > prefix.length }
+                val variants = entries
+                    .filter { it.tag.startsWith(prefix) && it.tag.length > prefix.length }
                     .map { it.tag.substring(prefix.length) to it.description }
-                if (variants.isEmpty()) return@mapNotNull null
-                val sorted = variants.sortedBy { if (it.first == DEFAULT_VARIANT) 0 else 1 }
-                val text = sorted.joinToString(", ") { (variant, description) ->
-                    if (description.isEmpty()) variant else "$variant($description)"
+                    .sortedBy { if (it.first == DEFAULT_VARIANT) 0 else 1 }
+                if (variants.isNotEmpty()) byName[name] = variants
+            }
+            if (byName.isEmpty()) return null
+
+            // **변형 이름으로** 묶는다. 설명이 인물마다 달라도(`기본(장수의 기본 이미지)`) 묶이게 하려는 것이다.
+            // 순서는 처음 나온 순서를 지킨다(캐시 안정).
+            val grouped = LinkedHashMap<List<String>, MutableList<String>>()
+            byName.forEach { (name, variants) -> grouped.getOrPut(variants.map { it.first }) { mutableListOf() } += name }
+
+            // 묶음 안에서 **모두 같은 설명일 때만** 설명을 붙인다. 다르면 이름만 쓴다(공유할 수 없는 정보다).
+            // 설명이 변형 이름과 같으면 되풀이라 뺀다(`미소(미소)` → `미소`).
+            val groups = LinkedHashMap<List<String>, MutableList<String>>()
+            for ((variantNames, names) in grouped) {
+                val labels = variantNames.mapIndexed { i, variant ->
+                    val descriptions = names.map { byName.getValue(it)[i].second }.distinct()
+                    val shared = descriptions.singleOrNull().orEmpty()
+                    if (shared.isEmpty() || shared == variant) variant else "$variant($shared)"
                 }
-                "- $name — $text"
+                groups[labels] = names
+            }
+
+            var left = budget.coerceAtLeast(0)
+            val lines = mutableListOf<String>()
+            var truncated = false
+            for ((variants, names) in groups) {
+                if (left <= 0) { truncated = true; break }
+                val shown = variants.take(left)
+                if (shown.size < variants.size) truncated = true
+                left -= shown.size
+                lines += if (groups.size == 1) {
+                    "쓸 수 있는 인물: ${names.joinToString(", ")}\n" +
+                        "이 인물들은 모두 같은 변형을 가진다: ${shown.joinToString(", ")}"
+                } else {
+                    "- ${names.joinToString(", ")} — ${shown.joinToString(", ")}"
+                }
             }
             if (lines.isEmpty()) return null
-            return characterGuide(maxPerResponse) + "\n\n쓸 수 있는 인물과 변형:\n" + lines.joinToString("\n")
+
+            val heading = if (groups.size == 1) "" else "쓸 수 있는 인물과 변형:\n"
+            val body = characterGuide(maxPerResponse) + "\n\n" + heading + lines.joinToString("\n")
+            return CharacterBlock(body, used = budget.coerceAtLeast(0) - left, truncated = truncated)
         }
+
+        /** @property used 이 블록이 쓴 예산 */
+        private class CharacterBlock(val text: String, val used: Int, val truncated: Boolean)
     }
 }

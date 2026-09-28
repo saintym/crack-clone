@@ -52,8 +52,10 @@ crack:
     overlap-turns: 2           # 마지막 기록 턴과 겹쳐 넣는 원문 턴 수
     max-raw-turns: 30          # 원문 상한(최근 턴 수)
     keyword-max-active: 3      # 키워드북 동시 발동 수. 0이면 끔
+    max-active-characters: 6   # 한 턴에 프롬프트에 넣을 인물 수 상한(동행 인물 우선). 0 이하면 끔
   image:
-    prompt-max-entries: 50     # 프롬프트에 넣는 이미지 태그 수 상한
+    prompt-max-entries: 120    # 프롬프트에 넣는 이미지 태그 수 상한
+    max-per-response: 3        # 한 응답에 넣게 할 인물 이미지 수    # 프롬프트에 넣는 이미지 태그 수 상한(인물당 변형 수 × 활성 인물 수보다 넉넉하게)
   memory:
     budget:            # 기억 문서 예산(글자 수). 넘으면 기록 때 압축한다
       character: 3000
