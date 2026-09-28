@@ -49,7 +49,7 @@ data class ResponseChars(
  * 스토리 폴더의 `settings.json` (DESIGN.md §6.4).
  *
  * ```json
- * { "responseChars": { "min": 1200, "max": 2200 } }
+ * { "responseChars": { "min": 1200, "max": 2200 }, "maxCharacterImages": 6 }
  * ```
  *
  * 선택 파일이다. 없으면 전역 기본값(`crack.prompt.response-chars`)을 쓴다.
@@ -60,6 +60,12 @@ data class ResponseChars(
  */
 data class StorySettings(
     val responseChars: ResponseChars? = null,
+    /**
+     * 한 응답에 넣게 할 인물 이미지 수 상한 (T40). 없으면 전역 `crack.image.max-per-response`.
+     *
+     * 상황 변형(자세·행동)을 쓰면 한 장면에서 여러 번 바뀔 수 있어 3장이 좁다. 스토리마다 다르게 둔다.
+     */
+    val maxCharacterImages: Int? = null,
 ) {
     companion object {
         const val FILE_NAME = "settings.json"
@@ -94,6 +100,24 @@ data class StorySettings(
                 return EMPTY
             }
             return fromJson(json, file.toString())
+        }
+
+        /** 인물 이미지 수 상한의 허용 범위. 0이면 이미지를 넣지 않는다는 뜻으로 받아들인다. */
+        const val MAX_IMAGES_ALLOWED = 20
+
+        /**
+         * 이 스토리에 쓸 인물 이미지 수 상한. 값이 없거나 범위를 벗어나면 [fallback]을 쓴다.
+         */
+        fun maxCharacterImages(storyDir: Path, fallback: Int): Int {
+            val value = read(storyDir).maxCharacterImages ?: return fallback
+            if (value < 0 || value > MAX_IMAGES_ALLOWED) {
+                log.warn(
+                    "{}의 maxCharacterImages 값이 범위를 벗어나 전역 기본값을 쓴다: {} (허용 0~{}, 기본 {})",
+                    storyDir.resolve(FILE_NAME), value, MAX_IMAGES_ALLOWED, fallback,
+                )
+                return fallback
+            }
+            return value
         }
 
         /**
