@@ -12,7 +12,8 @@ import java.nio.file.Path
 /**
  * 스토리 폴더의 `state.json` (DESIGN.md §7.1).
  *
- * `{"companions": ["설월"], "location": "흑풍채 근처 숲", "time": "3일차 밤", "updatedAtTurn": 30}`
+ * `{"companions": ["설월"], "location": "흑풍채 근처 숲", "time": "3일차 밤", "updatedAtTurn": 30,`
+ * `"changedDocs": ["characters/설월.md"]}`
  *
  * 모르는 필드는 무시하고, 빠진 필드는 기본값을 쓴다.
  */
@@ -21,6 +22,12 @@ data class StoryState(
     val location: String? = null,
     val time: String? = null,
     val updatedAtTurn: Int? = null,
+    /**
+     * 사용자가 방금 고친 스토리 문서 경로 (T39). 다음 응답 한 번에만 신호로 쓰이고 지워진다.
+     *
+     * 기록 파이프라인이 쓴 것은 여기 들어가지 않는다. **사람이 고친 것만** 담는다.
+     */
+    val changedDocs: List<String> = emptyList(),
 ) {
     fun toJson(): String = MAPPER.writeValueAsString(this)
 
@@ -41,7 +48,10 @@ data class StoryState(
             val state: StoryState = MAPPER.readValue(json)
             // Kotlin 모듈은 List<String>의 null 원소를 막지 않는다
             @Suppress("USELESS_CAST", "SENSELESS_COMPARISON")
-            return state.copy(companions = (state.companions as List<String?>).filterNotNull())
+            return state.copy(
+                companions = (state.companions as List<String?>).filterNotNull(),
+                changedDocs = (state.changedDocs as List<String?>).filterNotNull(),
+            )
         }
 
         /** 파일을 읽는다. 파일이 없으면 빈 기본값. */
