@@ -15,6 +15,7 @@ import java.nio.file.Path
 @Service
 class StoryDocumentService(
     private val storyDirs: StoryDirs,
+    private val settingsChangedMarker: SettingsChangedMarker,
 ) {
 
     fun list(storyId: Long): List<StoryDocumentSummary> {
@@ -47,6 +48,8 @@ class StoryDocumentService(
         val dir = requireExists(location.dir)
         val file = StoryDocumentPaths.resolve(dir, doc)
         AtomicFiles.writeString(file, content)
+        // 사용자가 직접 고친 것이다. 다음 응답 한 번에만 "설정이 바뀌었다"를 알린다(T39)
+        settingsChangedMarker.mark(storyId, doc.path)
         return StoryDocumentContent(doc.path, doc.kind.value, content)
     }
 

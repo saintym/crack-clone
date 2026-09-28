@@ -40,6 +40,8 @@ export default function DocumentEditor({ storyId, path, title, reloadKey, plain,
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
+  /** 저장 직후 한 번 보이는 안내. 서버가 "설정이 바뀌었다"를 다음 응답에만 알린다(T39) */
+  const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -67,6 +69,7 @@ export default function DocumentEditor({ storyId, path, title, reloadKey, plain,
     const base = serverContent ?? '';
     setEditing({ draft: base, base });
     setSaveError(null);
+    setJustSaved(false);
   };
 
   const save = () => {
@@ -77,6 +80,7 @@ export default function DocumentEditor({ storyId, path, title, reloadKey, plain,
       .then(({ data }) => {
         setLoaded({ key, content: data.content, error: null });
         setEditing(null);
+        setJustSaved(true);
       })
       .catch((err) => setSaveError(errorMessage(err, '저장하지 못했습니다')))
       .finally(() => setSaving(false));
@@ -143,12 +147,19 @@ export default function DocumentEditor({ storyId, path, title, reloadKey, plain,
           <p className="text-text-primary">편집하는 동안 기억 기록으로 이 문서가 바뀌었습니다. 지금 저장하면 그 변경을 덮어씁니다.</p>
           <div className="mt-2 flex justify-end">
             <button
-              onClick={() => { const base = serverContent ?? ''; setEditing({ draft: base, base }); }}
+              onClick={startEdit}
               className="px-3 py-1 rounded-full text-accent hover:bg-accent/10"
             >
               바뀐 내용으로 다시 편집
             </button>
           </div>
+        </div>
+      )}
+
+      {justSaved && (
+        <div className="mb-3 rounded-xl border border-accent/30 bg-accent-soft px-3 py-2.5 text-[12px]">
+          <p className="text-text-primary">저장했습니다. <strong>다음 응답부터 새 설정을 따릅니다.</strong></p>
+          <p className="mt-1 text-text-muted">앞선 대화에서 보인 모습과 달라도 문서가 우선입니다. 이야기 안에서 설정이 바뀌었다는 말은 나오지 않습니다.</p>
         </div>
       )}
 

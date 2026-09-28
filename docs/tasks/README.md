@@ -1,6 +1,6 @@
 # 작업 보드
 
-> **T00~T23 전부 `DONE`.** 다음은 T24(웨이브 8)부터다. 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
+> **T00~T23, T27~T37 `DONE`.** 남은 것은 T24·T25(웨이브 8)와 **V2(웨이브 10): T38 → T26**이다. 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
 
 > 설계: [docs/DESIGN.md](../DESIGN.md) · 병렬 운영(worktree, 일정, 머지): [docs/PARALLEL.md](../PARALLEL.md) · 결정 사항: [Plan-roadmap.md](../../Plan-roadmap.md) · 에이전트 규칙: [CLAUDE.md](../../CLAUDE.md)
 
@@ -52,7 +52,8 @@
 | 8 | [T27](./T27-image-auto-insert.md) | 인물 이미지 자동 삽입(V8) + 카탈로그 등록 UX | — |
 | 8 | [T28](./T28-scenario-import-from-url.md) | URL에서 시나리오 가져오기 (분석 → 질문 → 생성) | T27 |
 | 8 | [T29](./T29-response-length-and-import-fixes.md) | 응답 분량 기준(D33) + 프롤로그 화자 태그 + BUG-024 | T27, T28 |
-| 9 | [T26](./T26-offscreen-characters.md) | 오프스크린 캐릭터 진행 — **보류**(사용자 테스트 후) | T24, T25 |
+| 10 (V2) | [T38](./T38-story-clock.md) | 스토리 시계 — 이야기 속 시각·장소(V9) | T30, T35 |
+| 10 (V2) | [T26](./T26-offscreen-characters.md) | 능동적 세계 — 오프스크린 캐릭터 에이전트(최대 3, 시간 기준) | **T38**, T24, T35 |
 
 진행 흐름 요약 (정확한 의존 관계는 위 표가 기준이다):
 - **웨이브 1:** 7개 동시 진행. 서로 의존하지 않는다
@@ -63,7 +64,7 @@
 - **웨이브 6:** T19·T20 동시
 
 ## 마이그레이션 번호 (미리 배정됨)
-V4 = T02 · V5 = T03 · V6 = T12 · V7 = T14. 다른 작업은 마이그레이션을 추가하지 않는다. 필요하면 DESIGN.md를 먼저 고친다.
+V4 = T02 · V5 = T03 · V6 = T12 · V7 = T14 · V8 = T27 · **V9 = T38**. 다른 작업은 마이그레이션을 추가하지 않는다. 필요하면 DESIGN.md를 먼저 고친다.
 
 ## 로드맵 마일스톤과의 대응
 - **M0 기반 정비:** T00, T01, T02, T03, T04, T07, T08, T09, T12

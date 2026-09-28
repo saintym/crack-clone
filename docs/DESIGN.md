@@ -335,6 +335,24 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
   - 읽는 코드는 `com.crack.story.settings.StorySettings`(순수 파일 라이브러리)다. 매 턴 파일 하나를 읽는다(LLM 호출 없음).
   - 기억 패널 → "이 스토리의 설정" → **응답 분량**에서 고칠 수 있다(스토리 문서 API 화이트리스트, §9).
 
+### 6.4-1 설정 변경 신호 (T39, D41)
+
+사용자가 스토리 문서를 직접 고쳤을 때, **AI에게 "방금 바뀌었다"를 알린다.**
+
+프롬프트는 매 턴 문서에서 새로 만들어지므로 고친 내용은 다음 턴에 이미 들어간다. **문제는 AI가 그 사실을 모르는 것이다.** 최근 대화 원문에 옛 말투·옛 설정이 남아 있으면 그쪽에 끌려간다.
+
+| | 무엇 |
+|---|---|
+| 켜기 | `PUT /api/stories/{id}/documents/content` → `state.json.changedDocs`에 경로 추가 (`SettingsChangedMarker.mark`) |
+| 넣기 | `SettingsChangedContributor` (BOTTOM, order 50). 목록이 비어 있으면 아무것도 넣지 않는다 |
+| 끄기 | 응답이 저장되면 `SettingsChangedHook`(AfterTurnHook, `@Order(200)`)이 비운다 |
+
+- **한 번만 쓰인다.** BOTTOM에 두어 캐시 접두사를 깨지 않는다.
+- **기록 파이프라인이 쓴 문서는 담기지 않는다.** 이 경로는 사용자 편집 API만 지난다.
+- 신호 문구가 지시하는 것: 이번 응답부터 새 설정을 따른다 · 앞선 대화와 어긋나도 **문서가 우선**이다 · **설정이 바뀌었다는 사실을 이야기 안에서 언급하지 않는다** · 지난 일을 없던 일로 만들지는 않는다.
+- 경로가 `SettingsChangedContributor.MAX_LISTED`(8)를 넘으면 앞 8개만 나열하고 나머지는 개수로 알린다.
+- `state.json`을 읽지 못하거나 깨져 있으면 신호를 건너뛴다. 플레이가 멈추는 것보다 낫다.
+
 ### 6.5 인지 범위 — 누가 무엇을 아는지 (T35, D38)
 
 인물이 **프롬프트에 있다는 이유로** 모든 것을 알게 되는 문제를 막는다. **자료를 빼지 않고 규칙으로 가른다** — 롤플레이 마스터는 복선과 묘사를 위해 전부 알아야 하지만 인물은 자기가 겪은 것만 알아야 한다. 매 턴 추가 LLM 호출은 하지 않는다.
