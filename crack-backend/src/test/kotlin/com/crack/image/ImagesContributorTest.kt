@@ -17,7 +17,7 @@ import org.mockito.kotlin.mock
 import java.nio.file.Files
 import java.nio.file.Path
 
-/** IMAGES 기여자 (DESIGN.md §6, §8.5, D31·D34) */
+/** IMAGES 기여자 (DESIGN.md §6, §8.5, D31·D34, T40) */
 class ImagesContributorTest {
 
     @TempDir lateinit var root: Path
@@ -85,6 +85,8 @@ class ImagesContributorTest {
 
         // 본문에 직접 넣는 방법을 안내한다(D34)
         assertThat(text).contains("{{img:이름_변형}}", "- 설월 — 기본, 당황(눈을 크게 뜬 모습)")
+        // 변형은 감정만이 아니라 상황·자세일 수도 있다(T40)
+        assertThat(text).contains("상황이나 자세")
         // 활성 인물이 아닌 무극은 넣지 않는다
         assertThat(text).doesNotContain("무극")
         // 변형 목록은 인물별 한 줄이다. 장면 태그처럼 낱개로 늘어놓지 않는다
@@ -140,5 +142,75 @@ class ImagesContributorTest {
 
         assertThat(text).contains("- t1", "- t2").doesNotContain("- t3")
         assertThat(ImagesContributor.render(ImageCatalogParser.parse(images), 0)).isNull()
+    }
+
+    // ── 예산 순서 (T40) ──
+
+    @Test
+    fun `예산은 걸른 뒤에 쓴다 - 파일 뒤쪽 활성 인물의 변형도 들어간다`() {
+        // 앞쪽에 비활성 인물 변형이 예산보다 많고, 활성 인물은 파일 맨 뒤에 있다
+        val images = (1..10).joinToString("\n") { "- 무극_v$it: https://example.com/$it.webp" } +
+            "\n- 설월_기본: https://example.com/s.webp"
+        val (c, ctx) = contributor(
+            images,
+            max = 5,
+            characters = listOf("무극", "설월"),
+            recentText = "설월이 조용히 걸어왔다",
+        )
+
+        val text = c.contribute(ctx)!!
+
+        // 자르기를 먼저 했다면 설월은 예산 안에 들어오지 못했다
+        assertThat(text).contains("- 설월 — 기본")
+        assertThat(text).doesNotContain("무극")
+    }
+
+    @Test
+    fun `인물 변형이 예산을 먼저 쓰고 남은 것을 장면 태그가 쓴다`() {
+        val images = listOf(
+            "- 객잔_밤: https://example.com/1.webp",
+            "- 객잔_낮: https://example.com/2.webp",
+            "- 설월_기본: https://example.com/3.webp",
+            "- 설월_분노: https://example.com/4.webp",
+        ).joinToString("\n")
+        val (c, ctx) = contributor(images, max = 3, characters = listOf("설월"), recentText = "설월")
+
+        val text = c.contribute(ctx)!!
+
+        assertThat(text).contains("- 설월 — 기본, 분노")
+        // 인물이 2칸을 쓰고 남은 1칸만 장면 태그가 쓴다
+        assertThat(text).contains("- 객잔_밤").doesNotContain("- 객잔_낮")
+    }
+
+    // ── 한 응답 상한 (T40) ──
+
+    @Test
+    fun `한 응답 상한을 안내 문구에 넣는다`() {
+        assertThat(ImagesContributor.characterGuide(3)).contains("한 응답에 3개까지만")
+        assertThat(ImagesContributor.characterGuide(8)).contains("한 응답에 8개까지만")
+    }
+
+    @Test
+    fun `스토리 설정이 한 응답 상한을 이긴다`() {
+        val (c, ctx) = contributor(
+            "- 설월_기본: https://example.com/1.webp",
+            characters = listOf("설월"),
+            recentText = "설월",
+        )
+        Files.writeString(ctx.storyDir.resolve("settings.json"), "{\"maxCharacterImages\": 7}")
+
+        assertThat(c.contribute(ctx)!!).contains("한 응답에 7개까지만")
+    }
+
+    @Test
+    fun `범위를 벗어난 설정은 무시하고 전역 기본값을 쓴다`() {
+        val (c, ctx) = contributor(
+            "- 설월_기본: https://example.com/1.webp",
+            characters = listOf("설월"),
+            recentText = "설월",
+        )
+        Files.writeString(ctx.storyDir.resolve("settings.json"), "{\"maxCharacterImages\": 999}")
+
+        assertThat(c.contribute(ctx)!!).contains("한 응답에 3개까지만")
     }
 }
