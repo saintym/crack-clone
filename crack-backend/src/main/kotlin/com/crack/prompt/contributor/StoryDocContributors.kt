@@ -22,13 +22,18 @@ class ScenarioContributor : PromptContributor {
         StoryDocs.read(ctx.storyDir.resolve("scenario.md"))?.let { StoryDocs.titled("시나리오", it) }
 }
 
-/** PROTAGONIST: `characters/protagonist.md`. 활성 인물 선택과 무관하게 항상 넣는다(§6.2). */
+/**
+ * PROTAGONIST: `characters/protagonist.md`. 활성 인물 선택과 무관하게 항상 넣는다(§6.2).
+ *
+ * `(비공개)`로 끝나는 섹션은 [PrivateSections]가 라벨을 붙여 뒤로 몰아 준다(§6.5, D38).
+ */
 @Component
 class ProtagonistContributor : PromptContributor {
     override val slot = PromptSlot.PROTAGONIST
     override val order = 0
     override fun contribute(ctx: PromptContext): String? =
-        StoryDocs.read(MemoryDocs.protagonistPath(ctx.storyDir))?.let { StoryDocs.titled("주인공(사용자)", it) }
+        StoryDocs.read(MemoryDocs.protagonistPath(ctx.storyDir))
+            ?.let { StoryDocs.titled("주인공(사용자)", PrivateSections.render(it)) }
 }
 
 /** USER_NOTE: `user_note.md`. 없으면 T09 이전 옛 스토리가 쓰던 같은 스토리 폴더의 `memory/must_remember.md`. */
