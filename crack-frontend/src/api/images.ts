@@ -7,9 +7,27 @@ export interface ImageEntry {
   description: string;
 }
 
+/** 일괄 등록 결과 (DESIGN.md §8.6, T41) */
+export interface ImageBulkResult {
+  urlTemplate: string;
+  characters: { code: string; label: string }[];
+  actions: { code: string; label: string }[];
+  /** 아직 카탈로그에 없는 항목만 온다 */
+  entries: ImageEntry[];
+  warnings: string[];
+  /** 실제로 `images.md`에 더한 수. 미리보기면 0 */
+  added: number;
+  /** 이미 같은 태그가 있어 건너뛴 수 */
+  duplicates: number;
+}
+
 export const imageApi = {
   /** 스토리가 쓰는 카탈로그(시나리오 원본 `images.md`). 파일이 없으면 빈 목록 */
   list: (storyId: number) => api.get<ImageEntry[]>(`/stories/${storyId}/images`),
+
+  /** 명세를 펼쳐 미리보기(`apply=false`)하거나 `images.md` 끝에 덧붙인다(`apply=true`) */
+  bulk: (scenarioName: string, spec: string, apply: boolean) =>
+    api.post<ImageBulkResult>(`/scenarios/${encodeURIComponent(scenarioName)}/images/bulk`, { spec, apply }),
 };
 
 /**

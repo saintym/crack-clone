@@ -4,6 +4,7 @@ import { documentApi, type CharacterInfo, type ScenarioDocumentType } from '../a
 import MobileLayout from '../components/layout/MobileLayout';
 import ImageCatalogList from '../components/scenario/ImageCatalogList';
 import ImageCatalogEditor from '../components/scenario/ImageCatalogEditor';
+import ImageBulkImport from '../components/scenario/ImageBulkImport';
 
 type Tab = 'world' | 'scenario' | 'prologue' | 'characters' | 'protagonist' | 'images' | 'keywords' | 'commands';
 
@@ -304,6 +305,11 @@ export default function ScenarioDetailPage() {
                   text={content}
                   onSave={saveImages}
                 />
+                {scenarioName && (
+                  <div className="mt-4">
+                    <ImageBulkImport scenarioName={scenarioName} onApplied={() => loadDocument('images')} />
+                  </div>
+                )}
                 <button
                   onClick={() => { setEditContent(content); setEditing(true); }}
                   className="mt-4 mb-6 py-3 bg-surface hover:bg-surface-hover text-text-secondary rounded-2xl text-[14px] font-medium transition-all"
