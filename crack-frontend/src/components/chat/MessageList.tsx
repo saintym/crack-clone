@@ -162,7 +162,7 @@ export default function MessageList({
               >
                 {!locked && (
                   <MessageMenu
-                    isUser={isUser}
+                    align={isUser && !novel ? 'right' : 'left'}
                     variants={msg.id === latestAssistant?.id && msg.variantIndex !== null ? {
                       index: msg.variantIndex,
                       count: msg.variantCount,
