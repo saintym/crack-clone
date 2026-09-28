@@ -11,6 +11,6 @@ class CharactersContributor(private val selector: ActiveCharacterSelector) : Pro
     override fun contribute(ctx: PromptContext): String? =
         selector.select(ctx)
             .filter { it.text.isNotBlank() }
-            .joinToString("\n\n") { StoryDocs.titled("캐릭터: ${it.name}", it.text) }
+            .joinToString("\n\n") { StoryDocs.titled("캐릭터: ${it.name}", PrivateSections.render(it.text)) }
             .ifEmpty { null }
 }
