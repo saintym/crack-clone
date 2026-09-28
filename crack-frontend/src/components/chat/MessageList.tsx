@@ -155,9 +155,7 @@ export default function MessageList({
             {!isEditing && (
               <div
                 className={`flex items-center gap-2 px-1 ${
-                  novel
-                    ? 'mt-0.5 opacity-35 hover:opacity-100 focus-within:opacity-100 transition-opacity'
-                    : `mt-1.5 ${isUser ? 'justify-end' : ''}`
+                  novel ? 'mt-0.5 menu-dim' : `mt-1.5 ${isUser ? 'justify-end' : ''}`
                 }`}
               >
                 {!locked && (

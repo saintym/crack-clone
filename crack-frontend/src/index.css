@@ -74,6 +74,26 @@
   }
 }
 
+/*
+ * 소설 모드의 메시지 액션 줄 (T31, T37).
+ *
+ * 읽는 동안 흐름을 방해하지 않게 흐려 두지만, **마우스가 있는 기기에서만** 그렇게 한다.
+ * 터치 기기에는 hover가 없어서 흐린 상태가 영구적이 되고, 그러면 버튼을 찾을 수 없다.
+ */
+.menu-dim {
+  opacity: 1;
+  transition: opacity 150ms;
+}
+@media (hover: hover) and (pointer: fine) {
+  .menu-dim {
+    opacity: 0.35;
+  }
+  .menu-dim:hover,
+  .menu-dim:focus-within {
+    opacity: 1;
+  }
+}
+
 /* Chat markdown styles */
 .chat-markdown p {
   margin-bottom: 0.5em;
