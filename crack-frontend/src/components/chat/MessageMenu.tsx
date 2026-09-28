@@ -1,8 +1,13 @@
 import { useState } from 'react';
 
 interface MessageMenuProps {
-  /** 유저 메시지면 오른쪽에 붙인다 */
-  isUser: boolean;
+  /**
+   * 액션 줄이 화면의 어느 쪽에 붙어 있는지. 드롭다운이 펼쳐지는 방향을 결정한다.
+   *
+   * 말풍선 모드의 유저 메시지만 `right`고, 그 밖(소설 모드 전부, AI 메시지)은 `left`다.
+   * **`isUser`로 정하면 안 된다** — 소설 모드에서는 유저 메시지 줄도 왼쪽에 붙기 때문이다(T36).
+   */
+  align: 'left' | 'right';
   /** 가장 최근 AI 메시지의 후보 정보. 후보가 2개 이상일 때만 `‹ n/m ›`를 보인다 */
   variants?: { index: number; count: number; onSelect: (index: number) => void };
   /** 대화의 마지막 AI 메시지(프롤로그 제외)면 재생성과 "지시하고 재생성"을 보인다 */
@@ -30,12 +35,16 @@ const menuItem =
 /**
  * 메시지 아래 액션 줄: 후보 넘기기(‹ n/m ›), 재생성, 이어쓰기, 더보기 메뉴(지시하고 재생성·분기·수정·삭제).
  * 삭제는 메뉴 안에서 한 번 더 확인한다("이 메시지부터 끝까지 삭제됩니다").
+ *
+ * 드롭다운 방향은 [align]이 정한다. 폭에는 `calc(100vw-1.5rem)` 상한을 둬서 좁은 화면에서도
+ * 화면 밖으로 나가지 않는다(T36).
  */
 export default function MessageMenu({
-  isUser, variants, canRegenerate, canContinue, canRetry, open, onToggle, onClose,
+  align, variants, canRegenerate, canContinue, canRetry, open, onToggle, onClose,
   onRegenerate, onRegenerateWithInstruction, onContinue, onBranch, onEdit, onDelete,
 }: MessageMenuProps) {
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const alignRight = align === 'right';
 
   const close = () => {
     setConfirmingDelete(false);
@@ -47,7 +56,7 @@ export default function MessageMenu({
   };
 
   return (
-    <div className={`flex items-center gap-1 ${isUser ? 'flex-row-reverse' : ''}`}>
+    <div className={`flex items-center gap-1 ${alignRight ? 'flex-row-reverse' : ''}`}>
       {variants && variants.count >= 2 && (
         <div className="flex items-center text-[12px] text-text-muted tabular-nums select-none">
           <button
@@ -114,10 +123,10 @@ export default function MessageMenu({
           <>
             <div className="fixed inset-0 z-40" onClick={close} />
             <div
-              className={`absolute ${isUser ? 'right-0' : 'left-0'} bottom-full mb-1 z-50 bg-bg-tertiary border border-border/60 rounded-xl shadow-xl overflow-hidden min-w-[140px]`}
+              className={`absolute ${alignRight ? 'right-0' : 'left-0'} bottom-full mb-1 z-50 bg-bg-tertiary border border-border/60 rounded-xl shadow-xl overflow-hidden min-w-[140px] max-w-[calc(100vw-1.5rem)]`}
             >
               {confirmingDelete ? (
-                <div className="px-4 py-3 w-56">
+                <div className="px-4 py-3 w-56 max-w-full">
                   <p className="text-sm text-text-primary mb-1">이 메시지부터 끝까지 삭제됩니다.</p>
                   <p className="text-[12px] text-text-muted mb-3">되돌릴 수 없습니다.</p>
                   <div className="flex gap-2">
