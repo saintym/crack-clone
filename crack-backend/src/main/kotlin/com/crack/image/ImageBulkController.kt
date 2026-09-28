@@ -62,6 +62,7 @@ class ImageBulkController(private val documentService: DocumentService) {
         } else {
             ImageBulkSpecParser.parse(request.spec)
         }
+        val warnings = parsed.warnings + missingCharacterWarnings(scenarioName, parsed)
         val existing = readImages(scenarioName)
         val known = ImageCatalogParser.parse(existing).map { it.tag }.toHashSet()
 
@@ -78,9 +79,39 @@ class ImageBulkController(private val documentService: DocumentService) {
             characters = parsed.characters,
             actions = parsed.actions,
             entries = fresh,
-            warnings = parsed.warnings,
+            warnings = warnings,
             added = added,
             duplicates = duplicates,
+        )
+    }
+
+    /**
+     * 이 시나리오에 **인물 문서가 없는 이름**을 경고한다 (T43).
+     *
+     * 태그는 `{인물 문서 파일명}_{변형}`이어야 인물 이미지로 동작한다. 이름이 안 맞으면
+     * ⑴ 그 인물이 활성 인물이 될 수 없어 변형 목록이 프롬프트에 안 들어가고,
+     * ⑵ **인물 이름으로 시작하지 않는 태그는 장면·배경 태그로 분류되어** AI가 배경으로 끼워 넣을 수 있다.
+     *
+     * 다른 작품의 코드표를 엉뚱한 시나리오에 붙이는 실수가 조용히 지나가지 않게 막는다.
+     */
+    private fun missingCharacterWarnings(
+        scenarioName: String,
+        parsed: ImageBulkSpecParser.Result,
+    ): List<String> {
+        if (parsed.characters.isEmpty()) return emptyList()
+        val known = try {
+            documentService.listCharacters(scenarioName).map { it.name }.toSet()
+        } catch (e: Exception) {
+            return emptyList() // 인물 목록을 못 읽으면 경고를 건너뛴다. 등록 자체를 막을 이유는 없다
+        }
+        val missing = parsed.characters.map { it.label }.distinct().filter { it !in known }
+        if (missing.isEmpty()) return emptyList()
+        val listed = missing.take(MAX_LISTED_MISSING).joinToString(", ")
+        val rest = if (missing.size > MAX_LISTED_MISSING) " 외 ${missing.size - MAX_LISTED_MISSING}명" else ""
+        return listOf(
+            "이 시나리오에 인물 문서가 없는 이름입니다: $listed$rest. " +
+                "이대로 등록하면 인물 이미지로 동작하지 않고 장면·배경 태그로 취급됩니다. " +
+                "이름을 `characters/{이름}.md`의 파일명과 같게 맞추거나, 그 작품의 시나리오에 등록하세요.",
         )
     }
 
@@ -89,6 +120,11 @@ class ImageBulkController(private val documentService: DocumentService) {
         documentService.readDocument(scenarioName, DocumentType.IMAGES).content
     } catch (e: NotFoundException) {
         ""
+    }
+
+    companion object {
+        /** 경고에 이름을 나열할 최대 인물 수 */
+        const val MAX_LISTED_MISSING = 10
     }
 
     private fun append(existing: String, entries: List<ImageEntry>): String {
