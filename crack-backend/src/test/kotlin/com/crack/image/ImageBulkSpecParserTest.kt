@@ -111,8 +111,8 @@ class ImageBulkSpecParserTest {
     fun `표가 비면 경고한다`() {
         val r = ImageBulkSpecParser.parse("#형식: ![](https://example.com/{c}_{a}.png)")
 
-        assertThat(r.warnings).anyMatch { it.contains("캐릭터 표") }
-        assertThat(r.warnings).anyMatch { it.contains("행동 표") }
+        assertThat(r.warnings).anyMatch { it.contains("캐릭터 목록") }
+        assertThat(r.warnings).anyMatch { it.contains("행동·상황 목록") }
         assertThat(r.entries).isEmpty()
     }
 
@@ -124,5 +124,65 @@ class ImageBulkSpecParserTest {
         val reparsed = ImageCatalogParser.parse(md)
 
         assertThat(reparsed.map { it.tag }).isEqualTo(r.entries.map { it.tag })
+    }
+
+    // ── 칸을 따로 받는 입구 (T42) ──
+
+    @Test
+    fun `칸을 따로 받아도 같은 결과가 나온다`() {
+        val fields = ImageBulkSpecParser.parseFields(
+            "https://example.com/{c}_{a}.png",
+            "F01: 완안연\nF02: 신소향",
+            "1: 기본/대화\n2: 미소\n3~4: 놀람",
+        )
+        val combined = ImageBulkSpecParser.parse(spec)
+
+        assertThat(fields.warnings).isEmpty()
+        assertThat(fields.entries).isEqualTo(combined.entries)
+    }
+
+    @Test
+    fun `글머리표와 빈 줄과 주석 줄을 건너뛴다`() {
+        val r = ImageBulkSpecParser.parseFields(
+            "https://example.com/{c}_{a}.png",
+            "# 캐릭터\n*F01: 완안연\n\n- F02: 신소향\n",
+            "+ 1: 기본",
+        )
+
+        assertThat(r.warnings).isEmpty()
+        assertThat(r.characters.map { it.label }).containsExactly("완안연", "신소향")
+        assertThat(r.entries.map { it.tag }).containsExactly("완안연_기본", "신소향_기본")
+    }
+
+    @Test
+    fun `주소 틀이 마크다운 이미지여도 주소만 꺼낸다`() {
+        val r = ImageBulkSpecParser.parseFields(
+            "![](https://example.com/{c}_{a}.png)",
+            "F01: 가",
+            "1: 기본",
+        )
+
+        assertThat(r.urlTemplate).isEqualTo("https://example.com/{c}_{a}.png")
+    }
+
+    @Test
+    fun `형식이 틀린 줄만 건너뛰고 나머지는 살린다`() {
+        val r = ImageBulkSpecParser.parseFields(
+            "https://example.com/{c}_{a}.png",
+            "F01: 가\n이건 콜론이 없다\nF02: 나",
+            "1: 기본",
+        )
+
+        assertThat(r.characters.map { it.label }).containsExactly("가", "나")
+        assertThat(r.warnings).anyMatch { it.contains("캐릭터 줄을 읽지 못해") }
+    }
+
+    @Test
+    fun `칸이 비면 어느 칸인지 알려 준다`() {
+        val r = ImageBulkSpecParser.parseFields("", "", "")
+
+        assertThat(r.warnings).anyMatch { it.contains("주소 틀이 비어 있습니다") }
+        assertThat(r.warnings).anyMatch { it.contains("캐릭터 목록이 비어 있습니다") }
+        assertThat(r.warnings).anyMatch { it.contains("행동·상황 목록이 비어 있습니다") }
     }
 }
