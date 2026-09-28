@@ -25,6 +25,10 @@ server:
   port: 8082
 
 crack:
+  web:
+    # 프론트 빌드(dist) 폴더. 값이 있으면 백엔드가 화면까지 서빙한다(T34, 외부 공개용).
+    # 비워 두면 화면은 Vite 개발 서버(:5173)가 맡는다. 예: ../crack-frontend/dist
+    dist-path: ${CRACK_WEB_DIST:}
   data-path: ${CRACK_DATA_PATH:../data}
   ai:
     # claude-code-cli | claude-api | fake (fake는 fake.enabled=true일 때만 등록)
