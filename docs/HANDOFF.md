@@ -1,157 +1,170 @@
-# 인수인계 (2026-09-23)
+# 인수인계 (갱신 2026-09-29)
 
-> 로컬에서 v2 구현(T00~T21)을 모두 마치고 `main`에 머지·push한 시점의 인수인계 문서다. **이후 작업은 리모트 세션(Claude Code on the web)에서 이어서 한다.**
-> 문서 지도: 결정 사항 [Plan-roadmap.md](../Plan-roadmap.md) · 계약 [DESIGN.md](./DESIGN.md) · 작업 명세와 로그 [tasks/](./tasks/README.md) · 병렬 운영 [PARALLEL.md](./PARALLEL.md) · 오류 기록 [ORCHESTRATION-LOG.md](./ORCHESTRATION-LOG.md) · 버그 [bugs/](../bugs/README.md) · 에이전트 규칙 [CLAUDE.md](../CLAUDE.md)
+이 문서부터 읽는다. 그다음 [docs/DESIGN.md](./DESIGN.md)(작업 간 계약)와 [Plan-roadmap.md](../Plan-roadmap.md)(결정 D1~D43)를 본다.
+
+> **이전 판(2026-09-23)에 적혀 있던 사용자 할 일은 전부 끝났다.** 로컬 설정, 데이터 이전, 실제 AI 검증, 브라우저 확인, 외부 공개까지 완료됐다. 지금은 **사용자가 실제로 플레이하면서 나온 문제를 고치는 단계**다.
 
 ---
 
 ## 1. 현재 상태
 
-- `main` = `origin/main`, 작업 트리 깨끗함. 작업 21개 + 운영 중 추가 1개(T21) 전부 머지됨(작업당 머지 커밋 1개).
-- `docs/tasks/T00`~`T21` 상태는 모두 `DONE`. **계획된 남은 작업은 없다.**
-
-| 항목 | 값 |
-|---|---|
-| 백엔드 테스트 | 415개 전부 통과 (`./gradlew test`) |
-| 프론트 | `npm run build` 통과, `npm run lint` 오류 0, 메인 번들 약 294kB(패널은 lazy) |
-| DB | Flyway V1~V7. 실제 PostgreSQL 14에서 적용과 `ddl-auto: validate` 통과 |
-| 프롬프트 크기 | 마도생존기 기준 192KB → 56~79KB (−59~71%) |
-| 버그 | BUG-001~011 중 10건 수정, BUG-007(낮음) 보류 |
-
-### 구현된 기능과 위치
-| 기능 | 백엔드 | 프론트 |
+### 작업 보드
+| | 개수 | 목록 |
 |---|---|---|
-| 대화(전송·SSE·재생성 후보·수정·삭제·이어쓰기) | `chat/api`, `chat/flow`, `message/**` | `api/chat.ts`, `hooks/useChatStream.ts`, `components/chat/**` |
-| 감정 태그 숨김 | `chat/flow/EmotionTagFilter` | `components/chat/emotionTag.ts` |
-| 기억 기록(3계층 문서, 10턴·`/기록`, 되돌리기) | `memory/record/**`, `memory/docs/**` | `components/panels/memory/**` |
-| 프롬프트 조립 v2(기여자, 활성 인물, 원문 범위) | `prompt/**` | — |
-| 지속 OOC 지시 · `/` 명령 | `directive/**`, `command/**` | `components/panels/directives/**`, `components/chat/CommandPalette.tsx` |
-| 키워드북 | `prompt/keyword/**` | 문서 편집으로 관리 |
-| 인물 상태 패널 | `status/**` | `components/panels/status/**` |
-| 이미지 카탈로그 | `image/**` | `hooks/useImageCatalog.ts`, `ChatBubble` |
-| 스토리 격리·문서 API | `story/files/**`, `document/story/**` | `api/storyDocuments.ts` |
-| 프롤로그 | `story/prologue/**` | `ScenarioDetailPage` "첫 메시지" 탭 |
-| 옛 데이터 이전 | `migration/**` | — |
+| `DONE` | 42 | T00~T23, T27~T37, T39~T44 |
+| `TODO` | 3 | **T24**(세계관 다이제스트·색인), **T25**(깊은 질의 폴백), 그리고 V2 |
+| V2 (`TODO`) | 2 | **T38**(스토리 시계) → **T26**(능동적 세계 에이전트). 순서를 지킨다 |
+
+전체 상태는 `grep -H '^- \*\*상태\*\*' docs/tasks/T*.md`로 본다.
+
+### 기준선
+- 백엔드 테스트 **592개 통과** (`cd crack-backend && ./gradlew test`)
+- 프론트 **build 통과, lint 오류 0** (`cd crack-frontend && npm ci && npm run build && npm run lint`)
+- 마이그레이션 V1~V8 적용됨. **다음 번호는 V9이고 T38에 배정돼 있다**
+
+### 실측 지표 (포트폴리오용)
+| 항목 | 값 | 조건 |
+|---|---|---|
+| 프롬프트 크기 | 15,761자 | 무림천하, 활성 인물 3명, 이미지 475개 등록 상태 |
+| 응답 분량 | 평균 994자 | D33 적용 후. 적용 전 평균 1,339자(최대 2,032) |
+| 한 턴 소요 | 19~21초 | 실제 CLI, opus |
+| 인물 문서 비용 | 1명당 약 1,460자 | 활성 인물 상한(6명)을 둔 근거 |
+| 테스트 | 109개 → 592개 | v2 시작 시점 대비 |
+
+### 실행 중인 것 (사용자 로컬)
+- Docker `crack-postgres` (PostgreSQL)
+- 백엔드 `:8082` — **프론트 빌드까지 서빙한다**(`--crack.web.dist-path`). 실제 Claude CLI 프로바이더
+- `cloudflared` 빠른 터널 — 외부 접속용 HTTPS. **끌 때마다 주소가 바뀐다**
+- 로컬 개발용 Vite `:5173`은 필요할 때만 띄운다
 
 ---
 
-## 2. 사용자가 직접 해야 할 일 (리모트 작업 전에)
+## 2. 최근에 무엇을 했나 (2026-09-26 ~ 29)
 
-### 2.1 로컬 설정 갱신 — **완료 (2026-09-24)**
-`crack-backend/src/main/resources/application.yml`(gitignore 대상)을 v2 키로 갱신해 두었다. 비밀값(DB 비밀번호, 인증 비밀번호, 토큰 시크릿)은 기존 값을 그대로 두었다.
-- `crack.ai.purpose-tiers`, `crack.ai.cli.path|timeout-seconds|models`, `crack.ai.fake.enabled` 추가. `path`는 기본값 `claude`(PATH에 있음). **옛 키 `crack.ai.claude-cli-path`는 더 이상 읽지 않는다.**
-- `crack.prompt.*`, `crack.image.*`, `crack.memory.budget.*`, `crack.memory.record.*`, `crack.migration.legacy.enabled` 추가
-- `claude.model` / `opus-model` → `claude-sonnet-5` / `claude-opus-5`로 갱신
-- 모든 키 이름을 `@ConfigurationProperties` 클래스와 대조해 확인했다. YAML 파싱도 확인했다.
-- 환경변수로 덮어쓸 수 있게 해 둔 것: `CRACK_AI_FAKE`(AI 없이 띄울 때 true), `CRACK_MIGRATION_LEGACY_ENABLED`(§2.2), `CRACK_CLAUDE_CLI_PATH`
-- 남은 참고: DB 비밀번호가 평문이다. 환경변수(`DB_PASSWORD`)로 옮기는 것은 사용자 판단에 맡겼다.
+리모트 병렬 작업(T00~T23)이 끝난 뒤, **사용자가 직접 플레이하며 지적한 것**을 고치는 흐름이었다. 이 구간의 작업은 대부분 **실제 플레이에서만 드러나는 문제**였다.
 
-> ⚠️ **앱을 처음 실행하면 Flyway가 V4~V7을 사용자 DB에 적용한다.** 되돌리기 어려우므로 **§2.2의 백업을 먼저** 하고 실행한다. 실행만 해도 스키마는 바뀌고, 옛 대화 이전(§2.2)은 별도로 켜야 한다.
+| 작업 | 무엇 | 왜 여기서만 드러났나 |
+|---|---|---|
+| T27·T30 | 인물 이미지 자동 삽입 → **대사 바로 앞 인라인 배치**(D31·D34) | 맨 위에 한 장만 뜨면 "이미지가 먼저 나오고 그 아래 소설이 흐르는" 모양이 된다 |
+| T29 | 응답 분량 800~1,500자(D33) | 하한만 있던 프롬프트가 턴마다 응답을 길게 만들었다 |
+| T31·T32 | **소설형 읽기 모드**(기본), 전송은 버튼만, 턴 구분선(D35·D36) | 한 턴이 1,000자 산문인데 채팅 말풍선에 갇혀 있었다 |
+| T33 | 태그 앞 메타 텍스트 회수(BUG-025) | 20턴 중 1회, 모델이 영어 메타 문장을 먼저 뱉었다 |
+| T34 | **외부 공개** — 정적 서빙, 로그인 대입 제한, 비밀값 교체, 터널(D37) | 인터넷에 여는 순간 인증 기준이 달라졌다 |
+| T35 | **인지 범위** — `(비공개)` 섹션, `## 알고 있는 것`, 인지 규칙(D38) | 인물이 프롬프트에 있다는 이유로 주인공의 비밀을 다 알았다 |
+| T36·T37 | 좁은 화면 메뉴 잘림, 터치 기기 선명도 | 핸드폰에서만 드러났다 |
+| T39 | **설정 변경 신호**(D41) | 문서를 고쳐도 AI가 "바뀐 사실"을 몰라 옛 대화에 끌려갔다 |
+| T40~T44 | 이미지 상황 변형, 일괄 등록, 예산 단위와 상한(D42·D43) | 이미지가 25개 → 475개가 되자 프롬프트에서 잘렸다 |
 
-### 2.2 기존 데이터 이전 (T09, 1회)
-**이전하기 전까지 옛 기본 스토리(`_legacy`)는 시나리오 원본 폴더를 직접 읽고 쓴다.** 즉 스토리 격리가 적용되지 않는다.
-```bash
-# 백엔드를 끈 상태에서 백업
-cp -a data "data.backup-$(date +%Y%m%d%H%M)"
-pg_dump -Fc -d crack -f "crack-$(date +%Y%m%d%H%M).dump"
-```
-그다음 `crack.migration.legacy.enabled=true`로 기동하거나 `POST /api/admin/migrate-legacy`를 호출한다. 멱등하므로 실패 시 원인을 고쳐 다시 실행하면 된다. 자세한 절차와 되돌리기는 `docs/tasks/T09-legacy-migration.md` 작업 로그에 있다.
-
-### 2.3 실제 AI로 확인 (품질 튜닝, 가장 중요)
-Fake 프로바이더로는 검증할 수 없는 부분이다.
-1. **CLI 출력 파서** — `ai/provider/ClaudeCodeCliProvider`와 `CliStreamJsonParser`. 테스트 픽스처는 실제 캡처가 아니라 바이너리 문자열을 보고 **손으로 쓴 것**이다. 실제 `claude` CLI로 스트리밍이 토큰 단위로 오는지, 중복 출력이 없는지 확인한다.
-2. **기억 관리자 프롬프트** — `memory/record/RecordPrompts.kt`(시나리오/캐릭터/주인공/압축). 실제로 10턴씩 몇 회차 돌려 기록 품질(무엇을 남기고 무엇을 버리는지)을 보고 문구를 다듬는다. **출력 태그 이름을 바꾸면 `RecordOutputParser`와 Fake 응답도 함께 고쳐야 한다.**
-3. 본 응답 품질(`prompt/contributor/BaseContributor`의 규칙, 분량, 문체)도 실제 모델로 보며 조정한다.
-
-### 2.4 브라우저로 훑어보기
-에이전트가 headless Chromium으로 확인했지만 실제 사용감은 직접 봐야 한다. 채팅(전송·재생성 후보·수정·이어쓰기), 오른쪽 패널 3탭(기억·지시·상태), `/` 명령, 시나리오 편집 탭(첫 메시지·키워드북·명령·이미지), 모바일 폭.
-
-### 2.5 BUG-005 잔여 정리
-`crack-backend/data/테스트세계`와 `data/테스트세계`의 `chat/chat_latest.md` 내용이 다르다. 어느 쪽이 최신인지 확인하고 정리한다(에이전트는 사용자 데이터라 손대지 않았다).
+**되돌아보면 패턴이 하나 있다.** H2·Fake 프로바이더로 통과한 기능이 실제 PostgreSQL·실제 AI·실제 기기에서 계속 깨졌다. 자동 테스트가 못 잡는 층이 있다는 뜻이고, 이 구간의 버그 대부분이 그 층에서 나왔다.
 
 ---
 
 ## 3. 리모트 세션에서 이어서 하는 방법
 
 ### 3.1 기본 규칙
-1. 리모트 세션에서 이 저장소를 열면 기본 브랜치는 `main`이다. 첫 지시로 **작업 파일 경로를 알려주는 것**이 가장 잘 동작했다: 예) "`docs/tasks/T22-*.md` 대로 진행해".
-2. 에이전트는 `CLAUDE.md`를 먼저 읽는다. 여기에 환경 제약(CLI·API 키·PG·실데이터 없음), 반복된 함정, 커밋·PR 규칙이 정리돼 있다.
-3. 리모트에는 Claude CLI도 API 키도 없다. **AI가 필요한 검증은 `crack.ai.fake.enabled=true` + `default-provider=fake`로 한다.**
-4. 상태는 자기 작업 파일의 `- **상태**:` 줄에만 적는다. `DONE`은 머지한 사람이 `main`에서 바꾼다.
-5. 여러 작업을 동시에 돌릴 때는 [PARALLEL.md](./PARALLEL.md)의 범위 분리와 머지 순서를 따른다. 로컬 병렬은 `scripts/task-worktree.sh`를 쓴다.
+[CLAUDE.md](../CLAUDE.md)가 규칙의 기준이다. 요약하면:
+1. 지정된 작업 파일 하나만 보고 일한다. **범위 밖 파일은 고치지 않는다**
+2. 계약을 바꿔야 하면 **`docs/DESIGN.md`를 코드보다 먼저** 고친다
+3. 상태는 **자기 작업 파일에서만** 바꾼다. `DONE`은 머지한 사람이 main에서 바꾼다
+4. 작업 로그에 **한 일 · 설계 판단과 이유 · 확인 방법 · 다음 사람이 알아야 할 것**을 남긴다
+5. **비밀값을 파일에 적지 않는다.** 명세·문서·로그에도 안 된다(2026-09-26에 실제로 사고가 있었다)
 
-### 3.2 새 작업을 추가하는 절차
-1. `docs/tasks/T22-<슬러그>.md`를 만든다. 기존 파일과 같은 머리말을 쓴다.
-   ```markdown
-   - **상태**: TODO
-   - **웨이브**: 7
-   - **의존**: 없음
-   - **브랜치**: `task/T22-<슬러그>`
-   - **마이그레이션**: 없음   ← DB 변경이 필요하면 **V8부터** 사용
-   ```
-   그리고 `## 목표 / ## 범위 (수정 가능한 파일) / ## 구현 내용 / ## 완료 조건 / ## 작업 로그`를 채운다. 범위는 **파일 단위로** 좁게 적는 것이 병렬 작업에서 가장 효과가 컸다.
-2. `docs/tasks/README.md` 표에 한 줄 추가한다(상태는 적지 않는다).
-3. 계약(스키마·API·파일 포맷)이 바뀌면 `DESIGN.md`를 **먼저** 고치는 커밋을 둔다.
-4. 다 끝나면 `main`에 `--no-ff`로 머지하고, 작업 파일 상태를 `DONE`으로 바꿔 push한다.
+### 3.2 리모트 환경의 제약
+- **Claude CLI와 API 키가 없다.** `FakeAiProvider`로 테스트한다. 실제 AI 호출에 의존하는 테스트를 만들지 않는다
+- **PostgreSQL이 없다.** H2(`application-test.yml`, Flyway 꺼짐)로 돈다. `src/main/resources/application.yml`은 gitignore라 **리모트에 없다**
+- **실제 시나리오 데이터가 없다.** `src/test/resources/fixtures/sample-scenario/`를 쓴다
+- 마이그레이션은 PostgreSQL 문법으로 쓴다. **V9는 T38에 배정돼 있다**
 
-### 3.3 우선순위 후보 (다음에 할 만한 것)
-| 순위 | 항목 | 이유 |
-|---|---|---|
-| 1 | **실제 AI 기반 프롬프트 튜닝**(§2.3) | 기능은 다 있고, 품질만 미검증이다. 코드 작업이 아니라 사용자 확인이 필요하다 |
-| 2 | **PG 테스트 인프라**(Testcontainers) | BUG-008은 H2 테스트 400여 개를 통과하고도 살아 있었다. T21의 정적 가드는 한 유형만 막는다 |
-| 3 | **프론트 테스트 러너**(Vitest) | 순수 함수(SSE 파서, 감정 태그, 이미지 태그, URL 검사)를 esbuild+node로 임시 확인만 했다 |
-| 4 | BUG-007(후보별 "수정됨" 표시) | `message_variants.edited_at` 추가가 필요하다(V8) |
-| 5 | 플레이키 테스트 `StoryMessageApiTest` | MockMvc 헤더 출력과 비동기 스레드의 경쟁(`ConcurrentModificationException`) |
-| 6 | Fake 프로바이더 echo 모드 | 입력이 응답에 반영되는지 프론트에서 검증할 수 있게 된다 |
-| 7 | 미결정 기능: 추천 답변, 시작 설정 여러 개 | 로드맵 §5. 도입 여부부터 결정해야 한다 |
-| 8 | 보류: 분기 트리 뷰(D4) | 현재는 메시지 시점 분기만 있고 확장하지 않았다 |
+### 3.3 새 작업을 추가하는 절차
+1. `docs/tasks/T45-*.md`를 만든다(번호는 기존 최대 + 1). 기존 파일을 형식 참고로 쓴다
+2. 계약이 바뀌면 `docs/DESIGN.md`를 먼저 고친다. 결정이면 `Plan-roadmap.md`에 `D44`를 더한다
+3. `docs/tasks/README.md`의 웨이브 표에 한 줄 더한다
+4. 브랜치 `task/T45-…`에서 작업하고 PR을 올린다
+
+### 3.4 다음에 할 만한 것 (우선순위 순)
+1. **T24 세계관 다이제스트 + 색인** — 프롬프트에서 남은 큰 덩이는 `world`(1,986자)와 `characters`(활성 3명에 4,383자)다. 인물 문서를 줄이면 **활성 인물 상한 6명을 올릴 여지**가 생긴다
+2. **T38 스토리 시계** — V2의 선행 과제지만 **단독으로 쓸모가 있다.** 지금 플레이하면 "사흘 뒤"인지 "그 자리에서 이어지는지"가 애매한 턴이 있다
+3. **BUG-007** — 변형별 "수정됨" 표시. V9가 필요하지만 T38이 V9를 쓰므로 **T38 뒤에 V10으로** 해야 한다
+4. **BUG-022** — 기억 기록 주기 "10턴" 문구가 화면에 하드코딩돼 있다. 설정값을 읽게 한다
+5. **프론트 테스트가 없다** — Vitest가 없어서 `emotionTag.ts`, `imageTags.ts` 같은 순수 함수도 검증이 안 된다. 실제로 T36(메뉴 잘림)은 테스트로 잡을 수 있는 종류였다
 
 ---
 
 ## 4. 알아 두어야 할 제약과 함정
 
-### 설계상 의도된 동작
-- **스토리 격리(critical):** 플레이 중에는 스토리 폴더만 읽고 쓴다. 시나리오 원본을 고쳐도 기존 스토리에는 반영되지 않는다(새 스토리에만). 예외는 `images.md` 하나로, 시나리오 원본을 읽기 전용 참조한다.
-- **감정 태그:** AI는 첫 줄에 `[감정: …]`을 쓰지만 서버가 떼어 `emotion` 칼럼에 저장한다. 사용자와 이후 AI 입력에는 보이지 않는다.
-- **기억은 배경 처리:** 플레이를 끊는 모달·승인·diff 팝업을 만들지 않는다. 채팅 화면에는 작은 뱃지만 둔다.
-- **매 턴 응답 전에는 LLM을 부르지 않는다.** 활성 인물은 동행 목록과 키워드 매칭으로 고른다.
-- **상태 패널은 기억 기록 때만 갱신**한다(매 턴 조회 없음).
+### 설계상 의도된 동작 (버그로 오해하기 쉽다)
+- **스토리 격리(D12).** 스토리를 만들 때 시나리오 원본을 통째로 복사한다. **원본을 고쳐도 기존 스토리에는 반영되지 않는다.** 예외는 `images.md` 하나다(원본을 참조한다)
+- **`user_note.md`는 스토리마다 빈 파일로 새로 만들어진다.** 시나리오에서 복사되지 않는다. 시나리오 단위 규칙은 `scenario.md`나 `world.md`에 둔다
+- **이미지 목록은 "필요할 때 꺼내 쓰는" 방식이 아니다.** AI가 고를 수 있는 변형을 알아야 하므로 목록이 매 턴 들어간다. 좁히는 것은 **활성 인물 선택**이다
+- **재생성은 가장 최근 AI 응답만** 가능하다. 후보가 쌓이고 `‹ n/m ›`로 넘긴다
+- **첫 줄 `[감정: …]` 값은 아무것도 쓰지 않는다.** DB에만 저장된다. 이미지는 `[인물: …]`(폴백)과 본문 `{{img:}}`(주 경로)가 고른다
 
-### 반복해서 걸린 함정 (CLAUDE.md에도 있음)
-- KDoc/주석에 `/*`가 들어간 문자열(`characters/*.md`)을 쓰면 Kotlin 컴파일이 깨진다.
-- MockMvc 테스트는 로컬 `application.yml` 유무로 인증 동작이 달라진다 → `@AutoConfigureMockMvc(addFilters = false)` 또는 `crack.auth.password=`로 고정.
-- SSE 테스트는 `asyncDispatch(result)`까지 실행해야 DB 커넥션 풀이 마르지 않는다.
-- Mockito로 Kotlin 기본 인자 함수를 스텁할 때는 매처 개수를 맞춘다(`chat(any(), anyOrNull())`).
-- React Hooks lint v7은 effect가 부르는 async 함수의 `await` 뒤 setState도 오류로 본다 → `.then` 체인이나 effect 안 IIFE.
-- 템플릿(`data/_templates/*.md`)을 추가하면 "템플릿 파싱 결과가 빈 값"인지 검사하는 테스트를 붙인다(안내 문구가 데이터로 읽히는 문제가 두 번 났다).
-- JPQL에 `:param IS NULL` 패턴을 쓰면 PostgreSQL에서 타입 추론이 실패한다(BUG-008). 쿼리를 분리한다. 정적 가드 테스트 `EditedTurnsQueryTest`가 막아 준다.
-- 브라우저 확인 없이는 CSS 레이어 문제(BUG-010)와 CORS 문제(BUG-011)를 잡을 수 없다.
+### 반복해서 걸린 함정
+- **한 글자 인물 이름은 키워드로 잡히지 않는다.** `KeywordMatcher.MIN_KEY_LENGTH`가 2다. 파일명이나 별칭을 두 글자 이상으로 둔다 (T44에서 테스트가 이것 때문에 죽었다)
+- **KDoc·주석에 `/*` 문자열**(`characters/*.md`)을 쓰면 Kotlin이 중첩 주석으로 읽어 컴파일이 깨진다
+- **MockMvc 테스트**는 `@AutoConfigureMockMvc(addFilters = false)` 또는 `crack.auth.password=`로 고정한다
+- **SSE 테스트**는 `asyncDispatch(result)`까지 실행해 요청을 끝낸다(안 하면 DB 커넥션 풀 고갈)
+- **프론트 `npm ci`**는 `.npmrc`(legacy-peer-deps)가 있어야 된다. React Hooks lint(v7)는 effect 안 async 함수의 `await` 뒤 setState도 오류로 본다
+- **PostgreSQL에서 `:param IS NULL` 형태의 JPQL은 깨진다**(BUG-008). 정적 가드 테스트가 이것을 막는다
+
+### 사용자 환경에서만 걸리는 것
+- **프론트를 고치면 `npm run build`를 다시 해야 외부에 반영된다.** 백엔드가 `dist`를 서빙하므로 Vite처럼 자동 반영이 아니다
+- **`application.yml`은 jar에 박힌다.** 설정을 고치면 `./gradlew bootJar` → 재시작이 필요하다
+- **빠른 터널 주소는 끌 때마다 바뀐다.** 고정 주소가 필요하면 Cloudflare 계정 + 도메인으로 명명 터널을 만든다
 
 ### 아직 확인되지 않은 것
-- 실제 AI 프로바이더(CLI/API)로 돌린 적이 없다: 스트리밍 파서, 기억 프롬프트 품질.
-- PG에서 확인 못 한 흐름: 생성 중 409(동시성), 기록 도중 삭제로 RUNNING 취소, 재시작 시 RUNNING→FAILED 전환.
-- 안전 영역(`safe-*`) 여백은 `viewport-fit=cover`를 도입하면 다시 설계해야 한다.
+- 기억 문서 **압축 단계**가 실제로 도는 모습(예산 3,000자를 넘길 만큼 길게 플레이해야 한다)
+- **화자 재등장 시 이미지가 다시 붙는지**(T30). 모델이 한 인물 대사를 한 덩이로 모아 써서 실측으로 재현하지 못했다
+- **"지시하고 재생성"이 사용자 화면에서 어떻게 동작했는지.** 서버는 정상(후보가 붙고 지시를 따른다)이고 코드 경로도 맞아 재현하지 못했다. 사용자가 본 상황을 들어야 한다
+- 오래 플레이했을 때 기억력이 체감상 좋아졌는지
+- 터널을 오래 띄웠을 때 끊김·재연결 동작
 
 ---
 
 ## 5. 명령 요약
 
 ```bash
-# 테스트 · 빌드
+# 테스트 · 빌드 (반드시 통과)
 cd crack-backend && ./gradlew test
 cd crack-frontend && npm ci && npm run build && npm run lint
 
+# 작업 상태 한눈에
+grep -H '^- \*\*상태\*\*' docs/tasks/T*.md
+
 # 로컬 실행 (PostgreSQL 필요)
-cd crack-backend && ./gradlew bootRun          # :8082
-cd crack-frontend && npm run dev               # :5173 (CRACK_WEB_PORT / CRACK_API_TARGET로 변경 가능)
+cd crack-backend && ./gradlew bootRun
+cd crack-frontend && npm run dev          # 개발용 :5173
+
+# 외부 공개로 띄우기 (프론트까지 백엔드가 서빙)
+cd crack-frontend && npm run build
+cd ../crack-backend && ./gradlew bootJar
+java -jar build/libs/crack-backend-0.0.1-SNAPSHOT.jar \
+  --crack.data-path=<저장소>/data \
+  --crack.web.dist-path=<저장소>/crack-frontend/dist
+cloudflared tunnel --url http://localhost:8082 --no-autoupdate
 
 # AI 없이 띄우기 (Fake 프로바이더)
-cd crack-backend && ./gradlew bootRun --args='--crack.ai.fake.enabled=true --crack.ai.default-provider=fake'
+CRACK_AI_FAKE=true CRACK_AI_PROVIDER=fake ./gradlew bootRun
+
+# 프롬프트 크기·내용 확인 (LLM 호출 없음, 공짜)
+curl -s "localhost:8082/api/stories/{id}/prompt-preview" -H "Authorization: Bearer <토큰>"
 
 # 병렬 작업용 worktree
-scripts/task-worktree.sh create T22    # 작업 파일의 브랜치로 ../crack-clone-wt/T22 생성
-scripts/task-worktree.sh status        # 작업별 상태
-scripts/task-worktree.sh remove T22
+scripts/task-worktree.sh create T45 && scripts/task-worktree.sh status
 ```
 
-**주의:** 수동 확인용으로 앱을 띄울 때 worktree에는 사용자 `crack` DB를 가리키는 `application.yml`이 복사되어 있다. 반드시 datasource와 `crack.data-path`를 명령줄 인자로 덮어써서 실데이터와 사용자 DB를 건드리지 않게 한다(PARALLEL.md §5.2).
+---
+
+## 6. 문서 지도
+
+| 문서 | 무엇 |
+|---|---|
+| [CLAUDE.md](../CLAUDE.md) | 에이전트 작업 규칙. **비밀값 금지 규칙 포함** |
+| [docs/DESIGN.md](./DESIGN.md) | 작업 간 계약. 스키마·API·파일 포맷·프롬프트 구조 |
+| [Plan-roadmap.md](../Plan-roadmap.md) | 결정 D1~D43과 그 이유. 마일스톤 M0~M6 |
+| [docs/tasks/](./tasks/) | 작업 명세와 로그. 상태는 각 파일에만 |
+| [docs/PARALLEL.md](./PARALLEL.md) | 병렬 운영, worktree, 머지 순서 |
+| [docs/ORCHESTRATION-LOG.md](./ORCHESTRATION-LOG.md) | 진행 중 겪은 오류와 결정 |
+| [bugs/](../bugs/) | 버그 기록. BUG-007·BUG-022가 미수정 |
+| [docs/journal/](./journal/) | 개발기(포트폴리오용). 11편 + INDEX + SERIES |
+| [Plan-crack-gap.md](../Plan-crack-gap.md) | 원작 크랙 기능 조사와 사용자 피드백 |

@@ -1,6 +1,6 @@
 # 작업 보드
 
-> **T00~T23, T27~T37 `DONE`.** 남은 것은 T24·T25(웨이브 8)와 **V2(웨이브 10): T38 → T26**이다. 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
+> **T00~T23, T27~T37, T39~T44 `DONE`(42개).** 남은 것은 T24·T25(웨이브 8)와 **V2(웨이브 10): T38 → T26**이다. 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
 
 > 설계: [docs/DESIGN.md](../DESIGN.md) · 병렬 운영(worktree, 일정, 머지): [docs/PARALLEL.md](../PARALLEL.md) · 결정 사항: [Plan-roadmap.md](../../Plan-roadmap.md) · 에이전트 규칙: [CLAUDE.md](../../CLAUDE.md)
 
@@ -52,6 +52,12 @@
 | 8 | [T27](./T27-image-auto-insert.md) | 인물 이미지 자동 삽입(V8) + 카탈로그 등록 UX | — |
 | 8 | [T28](./T28-scenario-import-from-url.md) | URL에서 시나리오 가져오기 (분석 → 질문 → 생성) | T27 |
 | 8 | [T29](./T29-response-length-and-import-fixes.md) | 응답 분량 기준(D33) + 프롤로그 화자 태그 + BUG-024 | T27, T28 |
+| 8 | [T39](./T39-settings-changed-signal.md) | 설정 변경 신호 — 문서를 고치면 AI가 알아차린다 | T15, T35 |
+| 8 | [T40](./T40-image-variant-fixes.md) | 이미지 상황 변형, 예산 순서, 한 응답 상한 | T29, T30 |
+| 8 | [T41](./T41-image-bulk-import.md) | 이미지 카탈로그 일괄 등록 | T27, T40 |
+| 8 | [T42](./T42-bulk-import-fields.md) | 일괄 등록 세 칸 + PWA 캐시 수정 | T41 |
+| 8 | [T43](./T43-bulk-import-character-check.md) | 일괄 등록 시 인물 문서 확인 | T41, T42 |
+| 8 | [T44](./T44-prompt-budget-and-grouping.md) | 프롬프트 예산 — 변형 묶기, 활성 인물 수 제한 | T40, T43 |
 | 10 (V2) | [T38](./T38-story-clock.md) | 스토리 시계 — 이야기 속 시각·장소(V9) | T30, T35 |
 | 10 (V2) | [T26](./T26-offscreen-characters.md) | 능동적 세계 — 오프스크린 캐릭터 에이전트(최대 3, 시간 기준) | **T38**, T24, T35 |
 
