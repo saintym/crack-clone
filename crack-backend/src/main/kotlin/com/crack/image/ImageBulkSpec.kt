@@ -56,6 +56,47 @@ object ImageBulkSpecParser {
     private val RANGE = Regex("""^(\d+)\s*[~\-～]\s*(\d+)$""")
     private val TAG_FORBIDDEN = Regex("""[\s:{}|]+""")
 
+    /**
+     * 칸을 따로 받는 입구 (T42). 화면이 세 칸으로 나뉘어 있을 때 쓴다.
+     *
+     * 각 표는 한 줄에 `코드: 이름` 하나다. 앞에 `*`, `-`, `+`가 붙어 있어도 되고, 빈 줄과 `#` 줄은 무시한다.
+     * 제목 줄을 찾지 않으므로 **어느 칸이 캐릭터인지 헷갈릴 일이 없다.**
+     */
+    fun parseFields(urlTemplate: String, charactersText: String, actionsText: String): Result {
+        val warnings = mutableListOf<String>()
+        val template = extractUrl(urlTemplate).ifEmpty { urlTemplate.trim() }
+        val characters = parseCodeLines(charactersText, "캐릭터", warnings)
+        val actions = parseCodeLines(actionsText, "행동", warnings)
+        return assemble(template, characters, actions, warnings)
+    }
+
+    /** `코드: 이름` 줄 목록. 글머리표와 빈 줄, `#` 줄은 건너뛴다. */
+    private fun parseCodeLines(text: String, what: String, warnings: MutableList<String>): List<Code> {
+        val codes = mutableListOf<Code>()
+        for (raw in text.lines()) {
+            val line = raw.trim().removePrefix("*").removePrefix("-").removePrefix("+").trim()
+            if (line.isEmpty() || line.startsWith("#")) continue
+            val separator = line.indexOfFirst { it == ':' || it == '：' }
+            if (separator <= 0) {
+                warnings += "$what 줄을 읽지 못해 건너뜁니다(`코드: 이름` 형식이어야 합니다): ${raw.trim()}"
+                continue
+            }
+            val codePart = line.substring(0, separator).trim()
+            val label = line.substring(separator + 1).trim()
+            if (label.isEmpty()) {
+                warnings += "$what 이름이 비어 있어 건너뜁니다: ${raw.trim()}"
+                continue
+            }
+            val expanded = expandCodes(codePart)
+            if (expanded.isEmpty()) {
+                warnings += "$what 코드를 읽지 못해 건너뜁니다: ${raw.trim()}"
+                continue
+            }
+            expanded.forEach { codes += Code(it, label) }
+        }
+        return codes
+    }
+
     fun parse(spec: String): Result {
         val warnings = mutableListOf<String>()
         var template = ""
@@ -93,13 +134,24 @@ object ImageBulkSpecParser {
         // 주소 틀이 제목 줄에 없으면 본문 어디에서라도 찾아 본다
         if (template.isEmpty()) template = extractUrl(spec)
 
-        if (template.isEmpty()) warnings += "주소 틀을 찾지 못했습니다. `#형식: ![](https://…/{c}_{a}.png)` 줄이 필요합니다."
-        else {
+        return assemble(template, characters, actions, warnings)
+    }
+
+    /** 두 입구가 공유하는 검사와 조립. */
+    private fun assemble(
+        template: String,
+        characters: List<Code>,
+        actions: List<Code>,
+        warnings: MutableList<String>,
+    ): Result {
+        if (template.isEmpty()) {
+            warnings += "주소 틀이 비어 있습니다. `https://…/{c}_{a}.png` 형태가 필요합니다."
+        } else {
             if (!template.contains(CHARACTER_PLACEHOLDER)) warnings += "주소 틀에 $CHARACTER_PLACEHOLDER 가 없습니다."
             if (!template.contains(ACTION_PLACEHOLDER)) warnings += "주소 틀에 $ACTION_PLACEHOLDER 가 없습니다."
         }
-        if (characters.isEmpty()) warnings += "캐릭터 표가 비어 있습니다. 제목에 `캐릭터`가 들어간 구역이 필요합니다."
-        if (actions.isEmpty()) warnings += "행동 표가 비어 있습니다."
+        if (characters.isEmpty()) warnings += "캐릭터 목록이 비어 있습니다."
+        if (actions.isEmpty()) warnings += "행동·상황 목록이 비어 있습니다."
 
         val entries = if (template.isEmpty()) emptyList() else build(template, characters, actions, warnings)
         return Result(template, characters, actions, entries, warnings)

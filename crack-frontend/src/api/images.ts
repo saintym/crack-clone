@@ -25,9 +25,16 @@ export const imageApi = {
   /** 스토리가 쓰는 카탈로그(시나리오 원본 `images.md`). 파일이 없으면 빈 목록 */
   list: (storyId: number) => api.get<ImageEntry[]>(`/stories/${storyId}/images`),
 
-  /** 명세를 펼쳐 미리보기(`apply=false`)하거나 `images.md` 끝에 덧붙인다(`apply=true`) */
-  bulk: (scenarioName: string, spec: string, apply: boolean) =>
-    api.post<ImageBulkResult>(`/scenarios/${encodeURIComponent(scenarioName)}/images/bulk`, { spec, apply }),
+  /**
+   * 주소 틀·캐릭터 목록·행동 목록을 펼쳐 미리보기(`apply=false`)하거나 `images.md` 끝에 덧붙인다(`apply=true`).
+   * 각 목록은 한 줄에 `코드: 이름` 하나다 (T42).
+   */
+  bulk: (scenarioName: string, body: {
+    urlTemplate: string;
+    characters: string;
+    actions: string;
+    apply: boolean;
+  }) => api.post<ImageBulkResult>(`/scenarios/${encodeURIComponent(scenarioName)}/images/bulk`, body),
 };
 
 /**

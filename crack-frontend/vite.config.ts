@@ -14,6 +14,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // 화면(index.html)은 캐시하지 않고 매번 서버에서 받는다 (T42).
+      // 프리캐시해 두면 새 빌드를 올려도 **캐시된 옛 페이지가 먼저 떠서** 새로고침을 두 번 해야 했다.
+      // 해시가 붙은 에셋은 그대로 프리캐시한다(불변이라 안전하고 두 번째 방문이 빠르다).
+      // 대가: 오프라인에서 앱 껍데기가 열리지 않는다. AI 응답에 서버가 필요하므로 오프라인 값어치가 크지 않다.
+      workbox: {
+        globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest}'],
+        navigateFallback: undefined,
+        cleanupOutdatedCaches: true,
+      },
       manifest: {
         name: 'Crack Clone',
         short_name: 'Crack',

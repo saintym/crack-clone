@@ -642,12 +642,14 @@ class KeywordMatcher {
 
 이미지 주소가 `{캐릭터 코드}`·`{행동 코드}` 조합으로 규칙적일 때, 표 두 개와 주소 틀만 주면 조합을 모두 펼친다.
 
-`POST /api/scenarios/{name}/images/bulk` — body `{spec, apply}`.
+`POST /api/scenarios/{name}/images/bulk` — 입구가 둘이다(T42).
+- **칸을 따로**(화면이 쓰는 기본): body `{urlTemplate, characters, actions, apply}`. 각 목록은 **한 줄에 `코드: 이름` 하나**. 글머리표(`*`, `-`, `+`), 빈 줄, `#` 줄은 무시한다. 형식이 틀린 줄만 건너뛰고 나머지는 살리며, 어느 칸의 어느 줄인지 경고에 적는다
+- **한 덩이**: body `{spec, apply}`. 제목과 표를 한 텍스트에 담는다. `urlTemplate`이 비어 있을 때만 쓴다
 - `apply=false`(기본): **미리보기만.** 파일을 건드리지 않는다
 - `apply=true`: `images.md` **끝에 덧붙인다.** 기존 줄과 주석은 건드리지 않고, 이미 있는 태그는 건너뛴다
 - 응답: `{urlTemplate, characters, actions, entries, warnings, added, duplicates}`. `entries`는 **아직 카탈로그에 없는 것만** 온다
 
-**명세 형식** (`ImageBulkSpecParser`)
+**한 덩이 명세 형식** (`ImageBulkSpecParser.parse`)
 ```
 #형식: ![](https://example.com/{c}_{a}.png)
 
@@ -676,6 +678,8 @@ class KeywordMatcher {
 **왜 규칙을 보관하지 않고 펼쳐서 넣는가:** 규칙만 두고 요청 때 주소를 만드는 방법도 있다. 그런데 **프롬프트에는 결국 "쓸 수 있는 변형 목록"을 줘야 하므로 어차피 펼쳐야 하고**, 규칙만으로는 ⑴ 인물마다 있는 행동이 다른 경우를 구별할 수 없고(없는 조합이 404가 된다) ⑵ 한 장만 예외인 주소를 다룰 수 없다. 펼쳐 두면 사용자가 **그 줄만 지우거나 고칠 수 있다.**
 
 프론트는 이미 `GET /api/stories/{id}/images`로 카탈로그를 받아 렌더 시점에 태그→주소로 바꾼다. 저장 형태가 목록이든 규칙이든 **프론트 흐름은 달라지지 않는다.**
+
+**화면(`ImageBulkImport`)은 세 칸이다** — ① 주소 형식 ② 캐릭터 목록 ③ 행동·상황 목록. 한 덩이 텍스트는 어느 구역이 무엇인지 제목으로 알아내야 해서 헷갈린다. 주소 형식 칸은 `{c}`·`{a}` 유무를 입력 중에 검사한다. 칸을 고치면 미리보기 결과를 지운다(낡은 결과로 적용하지 않게).
 
 ## 9. 스토리 문서 API (T08)
 
@@ -706,6 +710,7 @@ src/hooks/useMessages.ts            메시지 목록 상태
 src/hooks/useProviders.ts           프로바이더 목록과 선택
 src/hooks/useStoryContext.ts        현재 스토리, 시나리오, 사이드바 목록
 src/hooks/useReadingMode.ts         읽기 모드(말풍선/소설형), localStorage에 저장 (T31)
+src/components/scenario/ImageBulkImport.tsx  이미지 일괄 등록 세 칸 (§8.6, T42)
 src/types/chat.ts, types/panel.ts   공용 타입
 src/components/chat/ChatHeader.tsx
 src/components/chat/MessageList.tsx
@@ -719,6 +724,21 @@ src/components/panels/…             T15 기억 패널, T18 지시 패널, T19 
 ```
 
 패널은 채팅 화면 오른쪽 드로어(모바일은 하단 시트)에 탭으로 모은다. **플레이 흐름을 가리는 모달은 쓰지 않는다** (D7).
+
+### 10.2 PWA 캐시 (T42)
+
+`index.html`은 **프리캐시하지 않는다.** 서비스 워커가 화면을 캐시하면 새 빌드를 올려도 **캐시된 옛 페이지가 먼저 떠서 새로고침을 두 번** 해야 한다.
+
+```ts
+workbox: {
+  globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest}'],
+  navigateFallback: undefined,
+  cleanupOutdatedCaches: true,
+}
+```
+
+해시가 붙은 에셋은 그대로 프리캐시한다(불변이라 안전하고 두 번째 방문이 빠르다).
+**대가:** 오프라인에서 앱 껍데기가 열리지 않는다. AI 응답에 서버가 필요하므로 오프라인 값어치가 크지 않다.
 
 ### 10.1 읽기 모드 (T31, D35)
 
