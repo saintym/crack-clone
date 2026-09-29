@@ -4,6 +4,7 @@ import com.crack.memory.docs.CharacterDoc
 import com.crack.memory.docs.MarkdownSections
 import com.crack.memory.docs.MemoryDocs
 import com.crack.memory.docs.ProtagonistDoc
+import com.crack.prompt.contributor.PrivateSections
 import java.time.LocalDate
 
 /**
@@ -24,8 +25,15 @@ object ImportDocs {
     /** 파일명·이미지 태그에 쓸 수 없는 문자. 태그 규칙(§8.5)과 경로 안전성을 함께 만족시킨다. */
     private val UNSAFE_IN_NAME = Regex("""[/\\:{}|*?"'<>\u0000-\u001F\s]+""")
 
+    /** 인지 범위 섹션 제목 (DESIGN.md §6.5). 사람이 쓰는 섹션이라 비어 있어도 된다. */
+    const val KNOWN = "알고 있는 것"
+
     fun sourceLine(url: String, date: LocalDate = LocalDate.now()): String =
         "<!-- 출처: $url (자동 생성 $date) -->"
+
+    /** URL이 없는 입력원(질문으로 만들기, T48)의 출처 한 줄. */
+    fun originLine(origin: String, date: LocalDate = LocalDate.now()): String =
+        "<!-- 출처: $origin (자동 생성 $date) -->"
 
     /**
      * 인물 이름을 파일명 겸 이미지 태그 접두사로 쓸 수 있게 다듬는다.
@@ -90,7 +98,13 @@ object ImportDocs {
      * 인물 문서. `- **이름**: {name}`을 보장하고, 이름이 [displayName]과 다르면
      * 원래 이름을 별칭에 넣는다(파일명을 다듬은 경우 대화에서 여전히 찾히게).
      */
-    fun character(fileName: String, displayName: String, body: String, source: String): String {
+    fun character(
+        fileName: String,
+        displayName: String,
+        body: String,
+        source: String,
+        withKnown: Boolean = false,
+    ): String {
         var text = clean(body)
         if (text.isBlank()) text = "# 캐릭터: $displayName\n"
         text = ensureTitle(text, "캐릭터: $displayName")
@@ -98,17 +112,47 @@ object ImportDocs {
         if (fileName != displayName) text = ensureAlias(text, displayName)
         text = dropSection(text, CharacterDoc.MEMORY)
         text = dropSection(text, ProtagonistDoc.CHANGES) // 인물 문서에는 변화 기록이 없다
+        if (withKnown) text = ensureKnown(text)
         return text.trimEnd() + "\n\n" + source + "\n\n## " + CharacterDoc.MEMORY + "\n"
     }
 
-    /** 주인공 문서. `## 변화 기록`을 빈 섹션으로 둔다. */
-    fun protagonist(displayName: String?, body: String, source: String): String {
+    /**
+     * 주인공 문서. `## 변화 기록`을 빈 섹션으로 둔다.
+     *
+     * [withPrivate]면 `(비공개)` 섹션이 하나도 없을 때 빈 것을 만든다 (DESIGN.md §6.5).
+     */
+    fun protagonist(displayName: String?, body: String, source: String, withPrivate: Boolean = false): String {
         var text = clean(body).ifBlank { "# 주인공 (사용자)\n" }
         text = ensureTitle(text, "주인공 (사용자)")
         if (!displayName.isNullOrBlank()) text = ensureField(text, "이름", displayName)
         text = dropSection(text, ProtagonistDoc.CHANGES)
         text = dropSection(text, CharacterDoc.MEMORY)
+        if (withPrivate) text = ensurePrivate(text)
         return text.trimEnd() + "\n\n" + source + "\n\n## " + ProtagonistDoc.CHANGES + "\n"
+    }
+
+    /**
+     * 등록할 이미지가 없는 입력원(T48)의 `images.md`.
+     *
+     * 사용자가 나중에 주소를 구해 채울 수 있게 **인물 태그 목록을 주석으로** 남긴다.
+     * 태그 줄을 미리 쓰지 않는 이유는 [images]와 같다(주소 없는 줄은 파서가 버린다).
+     */
+    fun imagePlaceholders(characterFileNames: List<String>, source: String): String = buildString {
+        append("# 이미지 카탈로그\n\n")
+        append("<!-- 형식: - 태그: 주소 | 설명 · 인물 이미지는 {인물}_기본 (인물 파일명과 같게) -->\n\n")
+        if (characterFileNames.isEmpty()) {
+            append("<!-- 등록할 인물이 없습니다. `- 태그: 주소 | 설명` 형식으로 직접 등록하세요. -->\n")
+        } else {
+            append("<!-- 등록할 인물 태그: ")
+            append(characterFileNames.joinToString(", ") { it + "_기본" })
+            append(" -->\n")
+            append("<!-- 주소를 구해 `- ")
+            append(characterFileNames.first())
+            append("_기본: https://… | ")
+            append(characterFileNames.first())
+            append("의 기본 이미지` 처럼 한 줄씩 적으세요. -->\n")
+        }
+        append('\n').append(source).append('\n')
     }
 
     /**
@@ -219,6 +263,29 @@ object ImportDocs {
         val index = lines.indexOfFirst { nameLine.containsMatchIn(it) }
         if (index >= 0) lines.add(index + 1, line) else lines.add(0, line)
         return lines.joinToString("\n")
+    }
+
+    /**
+     * `## 알고 있는 것` 섹션을 보장한다 (DESIGN.md §6.5, T35).
+     *
+     * **비어 있어도 된다.** 사람이 나중에 채우는 섹션이라 무엇을 적는 자리인지 주석으로 알려 준다.
+     * `## 기억`(AI가 쓴다)과 달리 압축되지 않으므로 초기 설정은 여기 적혀야 한다.
+     */
+    private fun ensureKnown(text: String): String {
+        if (MarkdownSections.find(text, KNOWN) != null) return text
+        return text.trimEnd() + "\n\n## " + KNOWN +
+            "\n<!-- 이 인물이 시작부터 아는 것. 주인공의 비공개 설정 중 아는 것이 있으면 여기 적는다 -->\n"
+    }
+
+    /**
+     * 주인공 문서에 `(비공개)` 섹션을 보장한다 (DESIGN.md §6.5, T35).
+     * 제목이 `(비공개)`로 끝나는 `##` 섹션이 하나라도 있으면 그대로 둔다.
+     */
+    private fun ensurePrivate(text: String): String {
+        val has = MarkdownSections.sections(text).any { it.title.trimEnd().endsWith(PrivateSections.MARKER) }
+        if (has) return text
+        return text.trimEnd() + "\n\n## 비밀 " + PrivateSections.MARKER +
+            "\n<!-- 등장인물들이 모르는 설정. 아는 인물이 있으면 그 인물 문서의 `## " + KNOWN + "`에 적는다 -->\n"
     }
 
     private fun dropSection(text: String, title: String): String {

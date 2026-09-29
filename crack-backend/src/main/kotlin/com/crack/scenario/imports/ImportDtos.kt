@@ -78,7 +78,7 @@ object ImportSseEvents {
 }
 
 /**
- * 생성 진행 상황을 받는 곳. SSE 구현은 `ScenarioImportService.SseEventSink`다.
+ * 생성 진행 상황을 받는 곳. SSE 구현은 [SseEventSink]다.
  * 테스트는 이벤트를 모으는 구현으로 바꿔 끼워 SSE 없이 파이프라인을 돌린다.
  */
 interface ImportEventSink {
