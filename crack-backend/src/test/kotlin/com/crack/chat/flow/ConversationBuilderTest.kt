@@ -41,6 +41,23 @@ class ConversationBuilderTest {
         listOf(view(MessageRole.ASSISTANT, "프롤로그", MessageKind.PROLOGUE, turn = 0)) +
             (1..turns).flatMap { t -> listOf(view(MessageRole.USER, "u$t", turn = t), view(MessageRole.ASSISTANT, "a$t", turn = t)) }
 
+    /** 프롤로그 없이 1..[turns]턴. 한 턴(유저+응답)이 정확히 [charsPerTurn]자다 */
+    private fun sizedConversation(turns: Int, charsPerTurn: Int): List<MessageView> =
+        (1..turns).flatMap { t ->
+            listOf(
+                view(MessageRole.USER, "u".repeat(charsPerTurn / 2), turn = t),
+                view(MessageRole.ASSISTANT, "a".repeat(charsPerTurn - charsPerTurn / 2), turn = t),
+            )
+        }
+
+    private fun window(
+        views: List<MessageView>,
+        recorded: Int = 0,
+        budgetChars: Int = 6000,
+        minTurns: Int = 2,
+        maxRawTurns: Int = 30,
+    ) = ConversationBuilder.rawWindow(views, recorded, budgetChars, minTurns, maxRawTurns)
+
     @Test
     fun `저장된 메시지를 역할대로 옮기고 연속된 같은 역할은 합친다`() {
         val views = listOf(
@@ -99,36 +116,93 @@ class ConversationBuilderTest {
 
         assertThat(result.first()).isEqualTo(ChatMessage(AiRole.ASSISTANT, "프롤로그"))
         assertThat(result).hasSize(11)
-        assertThat(builder(service).rawWindow(7L, conversation(5))).isEqualTo(RawWindow(0, -2))
+        // 프롤로그 4자 + 턴마다 4자 × 5턴
+        assertThat(builder(service).rawWindow(7L, conversation(5))).isEqualTo(RawWindow(0, -1, 6, 24))
     }
 
     @Test
-    fun `기록 후에는 recorded - overlap 턴 초과만 넣고 프롤로그는 뺀다`() {
+    fun `첫 기록 이후에는 프롤로그를 뺀다`() {
         val service = mock<MessageService> { on { list(7L) } doReturn conversation(15) }
 
         val result = builder(service, recorded = 10).build(7L)
 
-        // overlap 2 → 턴 9부터
-        assertThat(result.first()).isEqualTo(ChatMessage(AiRole.USER, "u9"))
+        // 기록한 구간도 예산 안이면 원문에 남는다. 빠지는 것은 프롤로그(턴 0)뿐이다
+        assertThat(result.first()).isEqualTo(ChatMessage(AiRole.USER, "u1"))
         assertThat(result.last()).isEqualTo(ChatMessage(AiRole.ASSISTANT, "a15"))
-        assertThat(result).hasSize(14)
+        assertThat(result).hasSize(30)
+        assertThat(builder(service, recorded = 10).rawWindow(7L, conversation(15)).afterTurn).isEqualTo(0)
+    }
+
+    // ---- 글자 예산 (T47) ----
+
+    @Test
+    fun `예산을 넘기 전까지 최근 턴부터 담는다`() {
+        val views = sizedConversation(10, charsPerTurn = 1000)
+
+        val window = window(views, budgetChars = 3500)
+
+        assertThat(window.turnCount).isEqualTo(3)
+        assertThat(window.chars).isEqualTo(3000)
+        assertThat(window.afterTurn).isEqualTo(7)
     }
 
     @Test
-    fun `원문 범위 경계`() {
-        // afterTurn = max(recorded - overlap, maxTurn - maxRaw), 기록 후에는 0 이상
-        assertThat(ConversationBuilder.rawWindow(0, 5, 2, 30).afterTurn).isEqualTo(-2)
-        assertThat(ConversationBuilder.rawWindow(10, 15, 2, 30).afterTurn).isEqualTo(8)
-        assertThat(ConversationBuilder.rawWindow(1, 3, 2, 30).afterTurn).isEqualTo(0) // 프롤로그는 첫 기록 이후 뺀다
-        assertThat(ConversationBuilder.rawWindow(0, 40, 2, 30).afterTurn).isEqualTo(10) // 상한: 최근 30턴(11..40)
-        assertThat(ConversationBuilder.rawWindow(10, 100, 2, 30).afterTurn).isEqualTo(70) // 기록이 밀려도 상한
-        assertThat(ConversationBuilder.rawWindow(0, 30, 2, 30).afterTurn).isEqualTo(0) // 딱 30턴이면 1..30
-        assertThat(ConversationBuilder.rawWindow(0, 31, 2, 30).afterTurn).isEqualTo(1)
-        assertThat(ConversationBuilder.rawWindow(20, 20, 0, 30).afterTurn).isEqualTo(20) // 다 기록했고 겹침 0이면 원문 없음
+    fun `턴을 쪼개지 않는다`() {
+        // 예산 2,500자 = 두 턴(2,000자) + 세 번째 턴의 절반. 반 턴은 넣지 않는다
+        val views = sizedConversation(10, charsPerTurn = 1000)
 
-        val window = ConversationBuilder.rawWindow(10, 15, 2, 30)
-        assertThat(window.includes(8)).isFalse()
-        assertThat(window.includes(9)).isTrue()
+        val window = window(views, budgetChars = 2500)
+
+        val turns = views.filter { window.includes(it.turn) }.map { it.turn }
+        assertThat(turns).containsExactly(9, 9, 10, 10)
+        assertThat(window.chars).isEqualTo(2000)
+    }
+
+    @Test
+    fun `한 턴이 예산보다 길어도 최소 턴 수는 넣는다`() {
+        val views = sizedConversation(5, charsPerTurn = 4000)
+
+        val window = window(views, budgetChars = 1000, minTurns = 2)
+
+        assertThat(window.turnCount).isEqualTo(2)
+        assertThat(window.chars).isEqualTo(8000)
+        assertThat(window.afterTurn).isEqualTo(3)
+    }
+
+    @Test
+    fun `최소 턴 수는 1 미만으로 내려가지 않는다`() {
+        val views = sizedConversation(3, charsPerTurn = 4000)
+
+        val window = window(views, budgetChars = 0, minTurns = 0)
+
+        assertThat(window.turnCount).isEqualTo(1)
+        assertThat(window.afterTurn).isEqualTo(2)
+    }
+
+    @Test
+    fun `예산이 남아도 안전 상한까지만 담는다`() {
+        val views = sizedConversation(40, charsPerTurn = 10)
+
+        val window = window(views, budgetChars = 1_000_000, maxRawTurns = 30)
+
+        assertThat(window.turnCount).isEqualTo(30)
+        assertThat(window.afterTurn).isEqualTo(10)
+        assertThat(window.includes(10)).isFalse()
+        assertThat(window.includes(11)).isTrue()
+    }
+
+    @Test
+    fun `빈 대화는 아무것도 담지 않는다`() {
+        assertThat(window(emptyList())).isEqualTo(RawWindow(0, -1, 0, 0))
+    }
+
+    @Test
+    fun `예산은 설정값을 쓴다`() {
+        val service = mock<MessageService> { on { list(7L) } doReturn sizedConversation(10, charsPerTurn = 1000) }
+
+        val result = builder(service, properties = PromptProperties(rawBudgetChars = 2000)).build(7L)
+
+        assertThat(result).hasSize(4) // 2턴 × (유저 + 응답)
     }
 
     @Test
