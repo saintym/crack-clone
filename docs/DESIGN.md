@@ -61,6 +61,7 @@
 | V6 | T12 | 사용하지 않는 테이블 삭제: `chat_messages`, `story_summaries`, `character_events`, `character_states`, `scenario_settings` |
 | V7 | T14 | `memory_records` 생성 · `stories.recorded_through_turn` 추가 |
 | V8 | T27 | `story_messages`·`message_variants`에 `speaker`, `speaker_variant` 추가 (§5.3 인물 태그) |
+| V9 | T38 | `story_messages`·`message_variants`에 `story_time`, `place` 추가 (§5.4 스토리 시계) |
 
 테스트는 H2(`ddl-auto: create-drop`, Flyway 꺼짐)로 돈다. 엔티티와 SQL이 둘 다 맞아야 한다. SQL은 PostgreSQL 문법으로 쓴다.
 
@@ -114,6 +115,10 @@ ALTER TABLE stories ADD COLUMN recorded_through_turn INT NOT NULL DEFAULT 0;
 -- V8 (§5.3 인물 태그). ASSISTANT만 값이 있고, 후보마다 따로 저장한다
 ALTER TABLE story_messages   ADD COLUMN speaker VARCHAR(100), ADD COLUMN speaker_variant VARCHAR(50);
 ALTER TABLE message_variants ADD COLUMN speaker VARCHAR(100), ADD COLUMN speaker_variant VARCHAR(50);
+
+-- V9 (§5.4 스토리 시계). 시계를 쓰지 않는 스토리는 NULL로 남는다
+ALTER TABLE story_messages   ADD COLUMN story_time TIMESTAMP, ADD COLUMN place VARCHAR(200);
+ALTER TABLE message_variants ADD COLUMN story_time TIMESTAMP, ADD COLUMN place VARCHAR(200);
 ```
 
 ### 턴 규칙
@@ -207,8 +212,9 @@ class MessageService {
 | DELETE | `/messages/{id}` | 이 메시지부터 끝까지 삭제. 응답 `{storyId, minTruncatedTurn, deletedCount, turnCount}` |
 | GET | `/messages/export` | 마크다운 내보내기 (`text/markdown`) |
 
-`MessageView = {id, seq, turn, role, kind, content, emotion, speaker, speakerVariant, variantIndex, variantCount, edited, createdAt}`.
+`MessageView = {id, seq, turn, role, kind, content, emotion, speaker, speakerVariant, storyTime, place, variantIndex, variantCount, edited, createdAt}`.
 `emotion`·`speaker`·`speakerVariant`는 화면에 **글로 출력하지 않는** 내부 신호다(§5.3). 프론트는 `speaker`로 인물 이미지를 고를 때만 쓴다(T27에서 추가. 그전에는 `emotion`을 내보내지 않았다).
+`storyTime`·`place`는 이야기 속 시각·장소다(§5.4, T38에서 추가). `storyTime`은 `createdAt`과 같은 ISO-8601 지역 시각 문자열(`"2026-02-15T20:30:00"`)이고, **시계를 쓰지 않는 스토리와 USER 메시지는 둘 다 `null`**이다.
 
 **SSE 이벤트:** `user`(저장된 유저 MessageView JSON), `delta`(텍스트), `done`(저장된 ASSISTANT MessageView JSON), `error`(메시지)
 
@@ -232,7 +238,7 @@ AI는 응답 **첫 줄**에 태그 줄을 쓴다. 감정 태그와 인물 태그
   인물이 없거나 주인공만 나오면 태그 자체를 생략한다. **변형은 프롬프트(IMAGES 슬롯)가 준 목록 안에서 고른다**(§8.5).
 - **두 태그 모두 사용자에게는 절대 보이지 않는다.** delta에도 저장 본문에도 남지 않는다.
 
-- **스트림 필터 `EmotionTagFilter`(T07, T27 확장):**
+- **스트림 필터 `EmotionTagFilter`(T07, T27·T38 확장 — T38은 같은 줄의 `[시간: …]`·`[장소: …]`까지 뗀다, §5.4):**
   - 응답 시작부를 버퍼링한다. 줄바꿈까지, 한 줄 최대 [200]자, **앞쪽 태그 줄 최대 2줄**까지 본다.
   - 한 줄이 `[감정: …]`·`[인물: …]` 태그만으로 이루어져 있으면 그 줄을 버리고 값만 기록한다. 태그 뒤에 본문이 섞인 줄은 태그 줄이 아니다.
   - 태그 줄이 아니라고 판단하면 버퍼를 그대로 흘린다. 그래서 `delta`에 태그가 절대 실리지 않는다.
@@ -240,6 +246,35 @@ AI는 응답 **첫 줄**에 태그 줄을 쓴다. 감정 태그와 인물 태그
 - **프롤로그:** 사람이 쓴 `prologue.md`도 같은 규칙으로 파싱한다(첫 줄에 태그를 적으면 인물 이미지가 붙는다).
 - **AI 입력:** 대화 기록으로 넘기는 과거 응답은 태그가 빠진 `content`다(토큰 절약). 태그 출력 규칙은 시스템 프롬프트(BASE)가 매번 요구한다.
 - **프론트:** 받은 내용을 그대로 렌더링한다. 방어용으로, 첫 줄이 태그 줄이면 숨기는 처리를 한 번 더 둔다(T11, T27). 인물 이미지 선택은 §8.5.
+
+### 5.4 스토리 시계 — 이야기 속 시각과 장소 (T38, D39)
+
+같은 태그 줄에 **시각과 장소**를 함께 받는다. 경과분(`+45분`)이 아니라 **장면이 도달한 절대 시각**이다 — 현재 시각은 어차피 프롬프트에 있으므로 AI에게 산술을 시키지 않는 쪽이 정확하다.
+
+```
+[시간: 2026-09-28 23:40] [장소: 에미야 저택] [감정: 피로] [인물: 사쿠라]
+```
+
+- **표현:** 내부 표현은 현실 달력(ISO) `YYYY-MM-DD HH:mm`이다. **장소는 자유 문자열**이다(목록을 두지 않는다 — 교차 판정이 필요한 것은 T26이고 그때 다시 본다).
+- **태그 소비:** `EmotionTagFilter`가 감정·인물과 **같은 줄에서 연달아** 뗀다(줄 수 2, 태그 수 6, 값 200자 상한). 앞머리 회수(BUG-025)도 그대로 적용된다.
+- **서버 검증은 단조 비감소뿐이다.** 상한은 두지 않는다("한 달 후"를 막기 때문이다).
+  - 값이 없는 턴은 **직전 값을 잇는다**(장면이 이어지는 턴).
+  - 직전보다 이르거나 파싱이 실패하면 **직전 값을 쓰고 경고 로그**를 남긴다.
+  - **어떤 경우에도 턴을 실패시키지 않는다.** 시계가 깨지는 것보다 멈추는 쪽이 낫다.
+- **저장:** `story_time`·`place` 칼럼(V9). **후보마다 따로** 저장하고, 후보를 고르면 메시지 사본과 `state.json`이 그 후보 값으로 맞춰진다.
+- **현재 값:** `state.json`의 `clock`(`"2026-09-28T23:40"` 문자열)·`place`. 응답을 저장한 뒤에 옮긴다(§7.1).
+- **시작점 고르는 순서:** `settings.json`의 `clock.enabled`가 false면 쓰지 않는다 → `state.json.clock` → `settings.json`의 `clock.start`·`clock.place` → **없으면 시계를 쓰지 않는다**(옛 스토리 호환).
+  ```json
+  { "clock": { "start": "2026-02-15 19:00", "place": "후유키 심산정", "enabled": true } }
+  ```
+  - `clock.start`가 없으면 **프롤로그 첫 줄의 `[시간: …]` 태그**가 시계를 시작한다(스토리를 만들 때 `state.json`에 적는다).
+  - **응답 태그만으로는 시계가 켜지지 않는다.** 시계를 쓰지 않는 스토리는 시각·장소를 계속 `null`로 저장한다.
+  - `clock.enabled: false`는 자체 역법(`홍무 15년 8월 13일`)을 쓰는 시나리오용 탈출구다. 표시 문자열 치환은 후속 과제다.
+- **되돌리기:** 메시지를 지우면(`TruncateHook` → `StoryClockTruncateHook`) 남은 메시지 중 시각이 적힌 마지막 것으로 맞춘다. 하나도 남지 않으면 `state.json`의 값을 지워 시작 시각으로 돌아간다.
+- **프롬프트:** 현재 값은 BOTTOM 기여자 `story_clock`(order 10)이 `[현재 시각]`·`[현재 장소]`로 넣는다(매 턴 바뀌므로 캐시 접두사를 깨지 않게 BOTTOM에 둔다). 태그 규칙 5줄은 BASE 출력 형식에 붙는다 — **시계를 쓰는 스토리에서만** 붙으므로 옛 스토리의 프롬프트는 예전과 같다.
+- **탈출구 `/시간`:** `/시간 2026-10-05 08:00` 또는 `/시간 +3일`(§8.2). **단조 검사를 적용하지 않는다** — AI가 어긋나게 찍었을 때 되돌리는 것이 목적이다.
+- **읽고 쓰는 코드:** `com.crack.story.clock` — `StoryClock`(순수 계산), `StoryClockFiles`(스토리 폴더 입출력), `StoryClockService`(스토리 단위 흐름), `StoryClockContributor`, `StoryClockTruncateHook`.
+- **화면:** T51이 맡는다. 머리글(`T47 · 2026. 09. 26. 수요일. 에미야 저택`)은 `MessageView.storyTime`·`place`와 `turn`으로 그린다.
 
 ## 6. 프롬프트 조립 (T08 격리, T13 v2)
 
@@ -278,13 +313,14 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 
   | slot | order | name | 내용 |
   |---|---|---|---|
-  | BASE | 0 | `base` | 롤플레이 마스터 역할(§6.6) + 기본 규칙 + 주인공 규칙(§6.4-2) + 인지 규칙(§6.5) + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그·인물 태그 §5.3, 응답 분량 §6.4) |
+  | BASE | 0 | `base` | 롤플레이 마스터 역할(§6.6) + 기본 규칙 + 주인공 규칙(§6.4-2) + 인지 규칙(§6.5) + 유저 입력 규칙(`**…**` 상황 묘사, `"…"` 대사) + 출력 형식(감정 태그·인물 태그 §5.3, 시각·장소 태그 §5.4(시계를 쓸 때만), 응답 분량 §6.4) |
   | WORLD | 0 | `world` | `world.md` |
   | SCENARIO | 0 | `scenario` | `scenario.md` |
   | SCENARIO | 100 | `chronicle` | `chronicle.md`의 `## 장 요약` + 최근 회차 원문. 최신 회차부터 거꾸로 `crack.memory.budget.chronicle` 안에서 담고(가장 최근 회차 하나는 넘어도 넣는다), 파일 순서(오래된 것부터)로 쓴다 |
   | PROTAGONIST | 0 | `protagonist` | `characters/protagonist.md` |
   | CHARACTERS | 0 | `characters` | 활성 인물 문서 전문(§6.2). `(비공개)` 분리(§6.5)와 `## 첫 인사` 라벨(§6.6)을 거친다 |
   | USER_NOTE | 0 | `user_note` | `user_note.md` (없으면 T09 이전 옛 위치 `memory/must_remember.md`) |
+  | BOTTOM | 10 | `story_clock` | 이야기 속 현재 시각·장소(§5.4, T38). 시계를 쓰지 않는 스토리에서는 생략 |
   | BOTTOM | 100 | `turn_instruction` | `turnInstruction` |
 
   뒤따르는 기능은 빈만 추가한다: T17 `KEYWORDS`, T20 `IMAGES`, T16 지속 지시는 `BOTTOM` order 0(이번 턴 지시보다 먼저).
@@ -350,7 +386,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
   ```json
   { "responseChars": { "min": 1200, "max": 2200 } }
   ```
-  - 같은 파일의 다른 필드: `maxCharacterImages`(T40, §8.5), `alwaysActive`(T50, §6.2).
+  - 같은 파일의 다른 필드: `maxCharacterImages`(T40, §8.5), `alwaysActive`(T50, §6.2), `clock`(T38, §5.4).
   - 시나리오 원본에 `settings.json`이 있으면 스토리를 만들 때 복사한다(`StoryFiles.COPIED_FILES`). 플레이 중에는 스토리 폴더의 파일만 읽는다(D12).
   - 모르는 필드는 무시한다. 파일이 없거나 `responseChars`가 없으면 전역 기본값을 쓴다.
   - 값이 깨졌거나(JSON 오류) 범위가 이상하면(`min` ≤ 0, `min` > `max`, `max` > 20000) **경고 로그를 남기고 전역 기본값**을 쓴다. 턴은 실패시키지 않는다.
@@ -482,6 +518,8 @@ BASE의 첫 절이 **무엇을 하는 사람인지**를 먼저 규정한다. 전
   - ...
   ```
 - **`state.json`:** `{"companions": ["설월"], "location": "흑풍채 근처 숲", "time": "3일차 밤", "updatedAtTurn": 30}`
+  - T39가 `changedDocs`(§6.4-1)를, T38이 `clock`·`place`(§5.4)를 더했다. **`clock`은 문자열**(`"2026-09-28T23:40"`)이다 — 값 하나가 깨져도 `state.json` 읽기 전체가 실패하지 않게 하려는 것이다. 기록 파이프라인이 쓰는 `time`·`location`("3일차 밤")과 별개다.
+  - 모르는 필드는 무시하고 빠진 필드는 기본값을 쓴다. 기존 규칙 그대로다.
 - **예산(글자 수, 설정값):** 인물 `## 기억` 3000, 주인공 `## 변화 기록` 4000, 연대기 회차 원문 12000. 키는 `crack.memory.budget.character|protagonist|chronicle`(T05에서 확정). 넘으면 파이프라인이 압축 단계를 추가로 실행한다.
 - **연대기 압축 트리거(D45):** 글자 예산 말고 **회차 수**로도 압축한다. 회차가 `crack.memory.record.chronicle-max-entries`(기본 4)를 넘으면 글자 예산 밑이어도 오래된 회차를 `## 장 요약`으로 접는다. 회차 수로 걸리면 목표 개수까지 한 번에 접고(`size - target`), 글자 예산으로만 걸리면 절반을 접는다. 둘 중 큰 쪽을 쓰며 **최근 1개는 반드시 남긴다.** 설정이 0 이하면 회차 수 트리거를 끈다. 압축 사유와 접은 개수는 INFO 로그로 남는다.
 - **T05 제공 API:** `readSection`, `replaceSection`(없으면 끝에 추가), `parseAliases`, `Chronicle.append/split/compactOldest`, `StoryState` 읽기·쓰기, 예산 검사.
@@ -617,6 +655,7 @@ trigger(storyId, reason)
   - `/기록` → 기억 기록 실행
   - `/ooc <내용>` → 지시 추가
   - `/ooc` → 지시 패널 열기(프론트 처리)
+  - `/시간 <시각>` → 이야기 속 시각 맞추기(§5.4, T38). `2026-10-05 08:00`(절대) 또는 `+3일`(상대)
 - **사용자 정의 명령**: `commands.md`에 정의한다.
   ```markdown
   ## /일기
@@ -626,10 +665,11 @@ trigger(storyId, reason)
   - 실행 흐름: `POST /messages`에 `{content: "/일기 오늘은…", command: "일기"}`를 보낸다. 유저 메시지는 `kind = COMMAND`로 저장되고, 명령 프롬프트는 이번 턴의 `turnInstruction`으로만 들어간다.
 - `GET /commands`: 시스템 명령과 사용자 정의 명령 목록(자동완성용)
 - **API 형식(T16 확정)**: 모두 `/api/stories/{storyId}` 아래
-  - `GET /commands` → `[{name, description, type}]`. `type` = `SYSTEM` | `CUSTOM`. 시스템 명령(`기록`, `ooc`)이 먼저, 사용자 정의 명령은 파일 순서. `name`에는 `/`를 붙이지 않는다
-  - `POST /commands/system` body `{name, args?}` → `{name, record, directive}`. 해당하지 않는 필드는 null
+  - `GET /commands` → `[{name, description, type}]`. `type` = `SYSTEM` | `CUSTOM`. 시스템 명령(`기록`, `ooc`, `시간`)이 먼저, 사용자 정의 명령은 파일 순서. `name`에는 `/`를 붙이지 않는다
+  - `POST /commands/system` body `{name, args?}` → `{name, record, directive, clock}`. 해당하지 않는 필드는 null
     - `기록`: T14 `trigger(MANUAL)`. `record`는 `POST /memory/record`의 응답(`{result, record}`)과 같다
     - `ooc`: `args`를 지속 지시로 추가한다. `directive`는 추가된 `Directive`. `args`가 비면 400(패널 열기는 프론트가 처리한다)
+    - `시간`: `args`로 이야기 속 시각을 맞춘다(§5.4). `clock`은 `{storyTime, place}`(`MessageView`와 같은 필드 이름·형식). `args`가 비었거나 알아볼 수 없으면 400, 시계를 끈 스토리(`clock.enabled: false`)도 400
     - 이름은 앞의 `/`를 떼고 대소문자 무시로 비교한다. 모르는 이름은 400
   - `POST /messages`의 `command`: 앞의 `/`를 떼고 사용자 정의 명령 이름과 비교한다. 모르는 명령이나 시스템 명령이면 400(유저 메시지를 저장하지 않는다)
 - **`commands.md` 파싱**: `## /이름`(또는 `## 이름`) 제목이 명령 하나다. 이름은 제목의 첫 단어. `설명:` 줄이 설명이고, `프롬프트:` 줄과 그 뒤의 줄(다음 제목 전까지)이 프롬프트다. `프롬프트:`가 없으면 `설명:`을 뺀 본문 전체가 프롬프트다. 프롬프트가 빈 명령, 시스템 명령과 같은 이름, 앞에서 이미 나온 이름은 버린다. 파일이 없으면 사용자 정의 명령이 없다

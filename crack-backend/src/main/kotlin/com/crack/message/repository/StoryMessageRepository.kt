@@ -21,6 +21,9 @@ interface StoryMessageRepository : JpaRepository<StoryMessage, Long> {
 
     fun findFirstByStoryIdAndRoleOrderBySeqDesc(storyId: Long, role: MessageRole): StoryMessage?
 
+    /** 이야기 속 시각이 적힌 마지막 메시지 (T38). 잘라내기 뒤 시계를 되돌릴 때 쓴다 */
+    fun findFirstByStoryIdAndStoryTimeIsNotNullOrderBySeqDesc(storyId: Long): StoryMessage?
+
     fun findByStoryIdAndTurnNoBetweenOrderBySeqAsc(storyId: Long, fromTurn: Int, toTurn: Int): List<StoryMessage>
 
     fun findByStoryIdAndSeqGreaterThanEqualOrderBySeqAsc(storyId: Long, seq: Int): List<StoryMessage>

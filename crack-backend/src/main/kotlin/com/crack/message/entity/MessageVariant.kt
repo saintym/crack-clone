@@ -33,6 +33,14 @@ class MessageVariant(
     @Column(name = "speaker_variant", length = 50)
     var speakerVariant: String? = null,
 
+    /** 이 후보가 도달한 이야기 속 시각 (T38, DESIGN.md §5.4). 시계를 쓰지 않으면 null */
+    @Column(name = "story_time")
+    var storyTime: LocalDateTime? = null,
+
+    /** 이 후보의 이야기 속 장소 (T38) */
+    @Column(length = 200)
+    var place: String? = null,
+
     /** 재생성 지시 (선택) */
     @Column(columnDefinition = "TEXT")
     val instruction: String? = null,

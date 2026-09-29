@@ -2,6 +2,7 @@ package com.crack.chat.flow
 
 import com.crack.ai.provider.StreamListener
 import com.crack.message.dto.ResponseTags
+import com.crack.story.clock.StoryClock
 
 /**
  * 첫 줄 태그를 뗀 응답을 받는 리스너. [EmotionTagFilter]의 출력 쪽이다.
@@ -11,14 +12,15 @@ interface TaggedResponseListener {
     /** 태그가 제거된 본문 조각 */
     fun onDelta(text: String)
 
-    /** @param body 태그를 뗀 본문 전체 @param tags 첫 줄에서 뽑은 감정·인물 값 */
+    /** @param body 태그를 뗀 본문 전체 @param tags 첫 줄에서 뽑은 감정·인물·시각·장소 값 */
     fun onComplete(body: String, tags: ResponseTags)
 
     fun onError(error: Throwable)
 }
 
 /**
- * 응답 앞쪽의 `[감정: …]`·`[인물: 이름/변형]` 태그를 스트림에서 떼어 낸다 (D19, D31, DESIGN.md §5.3).
+ * 응답 앞쪽의 `[감정: …]`·`[인물: 이름/변형]`·`[시간: …]`·`[장소: …]` 태그를 스트림에서 떼어 낸다
+ * (D19, D31, D39, DESIGN.md §5.3, §5.4).
  *
  * - 응답 시작부를 버퍼링한다. 그동안은 delta를 흘리지 않는다. 버퍼가 더 이상 태그의 앞부분일 수 없게 되면
  *   바로 판단을 끝내고 흘린다(`[`로 시작하지 않는 응답은 첫 delta에서 바로 통과한다).
@@ -100,20 +102,26 @@ class EmotionTagFilter(private val delegate: TaggedResponseListener) : StreamLis
         /** 태그를 찾을 줄 수 상한 */
         const val MAX_TAG_LINES = 2
 
-        /** 소비할 태그 개수 상한 */
-        const val MAX_TAGS = 4
+        /** 소비할 태그 개수 상한. 태그는 네 종류(감정·인물·시간·장소)이고 여유를 조금 둔다 */
+        const val MAX_TAGS = 6
 
         /** 인물 이름과 변형을 나누는 문자: `[인물: 설월/당황]` */
         const val VARIANT_SEPARATOR = '/'
 
         private const val EMOTION_KEY = "감정"
+        private const val SPEAKER_KEY = "인물"
+        private const val TIME_KEY = "시간"
 
         /** 태그 하나. 값에는 대괄호를 쓸 수 없고 [MAX_TAG_LINE]자까지다 */
-        val TAG = Regex("""\[\s*(감정|인물)\s*:([^\[\]]{0,$MAX_TAG_LINE})\]""")
+        val TAG = Regex("""\[\s*(감정|인물|시간|장소)\s*:([^\[\]]{0,$MAX_TAG_LINE})\]""")
 
-        /** 아직 닫히지 않은 태그의 앞부분(`[`, `[감`, `[인물`, `[인물: 설월/당`) */
-        private val PARTIAL_TAG =
-            Regex("""^\[\s*(?:감(?:정\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?|인(?:물\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?)?$""")
+        /** 아직 닫히지 않은 태그의 앞부분(`[`, `[감`, `[인물`, `[인물: 설월/당`, `[시간: 2026-`) */
+        private val PARTIAL_TAG = Regex(
+            """^\[\s*(?:감(?:정\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?""" +
+                """|인(?:물\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?""" +
+                """|시(?:간\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?""" +
+                """|장(?:소\s*(?::[^\[\]]{0,$MAX_TAG_LINE})?)?)?$"""
+        )
 
         /** 앞머리 회수(BUG-025)에서 훑어볼 줄 수 상한 */
         const val MAX_PREAMBLE_LINES = 6
@@ -183,6 +191,8 @@ class EmotionTagFilter(private val delegate: TaggedResponseListener) : StreamLis
             var emotion: String? = null
             var speaker: String? = null
             var variant: String? = null
+            var storyTime: String? = null
+            var place: String? = null
 
             while (count < MAX_TAGS) {
                 while (cursor < text.length && text[cursor].isWhitespace()) {
@@ -192,22 +202,25 @@ class EmotionTagFilter(private val delegate: TaggedResponseListener) : StreamLis
                 if (newlines >= MAX_TAG_LINES) break
                 val match = TAG.matchAt(text, cursor) ?: break
                 val value = match.groupValues[2].trim()
-                if (match.groupValues[1] == EMOTION_KEY) {
-                    if (emotion == null && value.isNotEmpty()) emotion = value
-                } else if (speaker == null && value.isNotEmpty()) {
-                    val slash = value.indexOf(VARIANT_SEPARATOR)
-                    if (slash < 0) {
-                        speaker = value
-                    } else {
-                        speaker = value.substring(0, slash).trim()
-                        variant = value.substring(slash + 1).trim()
+                when (match.groupValues[1]) {
+                    EMOTION_KEY -> if (emotion == null && value.isNotEmpty()) emotion = value
+                    SPEAKER_KEY -> if (speaker == null && value.isNotEmpty()) {
+                        val slash = value.indexOf(VARIANT_SEPARATOR)
+                        if (slash < 0) {
+                            speaker = value
+                        } else {
+                            speaker = value.substring(0, slash).trim()
+                            variant = value.substring(slash + 1).trim()
+                        }
                     }
+                    TIME_KEY -> if (storyTime == null && value.isNotEmpty()) storyTime = value
+                    else -> if (place == null && value.isNotEmpty()) place = value
                 }
                 count++
                 cursor = match.range.last + 1
                 end = cursor
             }
-            return Scan(end, count, ResponseTags.of(emotion, speaker, variant))
+            return Scan(end, count, ResponseTags.of(emotion, speaker, variant, StoryClock.parseTag(storyTime), place))
         }
 
         /** 남은 버퍼가 아직 태그의 앞부분일 수 있는지. 아니면 기다리지 않고 바로 흘린다. */
