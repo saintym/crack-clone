@@ -39,8 +39,21 @@ data class PromptPreviewResponse(
 ) {
     data class Section(val slot: PromptSlot, val name: String, val chars: Int, val content: String)
 
-    /** @property afterTurn 이 턴 **초과**만 원문에 넣었다 */
-    data class RawWindowView(val recordedThroughTurn: Int, val afterTurn: Int, val messageCount: Int)
+    /**
+     * 대화 원문 범위 (§6.1).
+     *
+     * @property afterTurn 이 턴 **초과**만 원문에 넣었다
+     * @property messageCount 담긴 저장 메시지 수
+     * @property turnCount 담긴 턴 수 (T47)
+     * @property chars 담긴 글자 수 — 글자 예산(`crack.prompt.raw-budget-chars`)과 견주는 값 (T47)
+     */
+    data class RawWindowView(
+        val recordedThroughTurn: Int,
+        val afterTurn: Int,
+        val messageCount: Int,
+        val turnCount: Int,
+        val chars: Int,
+    )
 
     data class Message(val role: MessageRole, val content: String)
 
@@ -53,7 +66,13 @@ data class PromptPreviewResponse(
             sections = p.sections.map { Section(it.slot, it.name, it.chars, it.content) },
             activeCharacters = p.activeCharacters,
             activeKeywords = p.activeKeywords,
-            rawWindow = RawWindowView(p.rawWindow.recordedThroughTurn, p.rawWindow.afterTurn, p.rawMessageCount),
+            rawWindow = RawWindowView(
+                recordedThroughTurn = p.rawWindow.recordedThroughTurn,
+                afterTurn = p.rawWindow.afterTurn,
+                messageCount = p.rawMessageCount,
+                turnCount = p.rawWindow.turnCount,
+                chars = p.rawWindow.chars,
+            ),
             systemPrompt = p.systemPrompt,
             messages = p.messages.map { Message(it.role, it.content) },
         )

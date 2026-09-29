@@ -82,6 +82,9 @@ class PromptPreviewApiTest {
         assertThat(body["totalChars"].asInt()).isEqualTo(body["systemChars"].asInt() + body["messageChars"].asInt())
         assertThat(body["rawWindow"]["recordedThroughTurn"].asInt()).isEqualTo(0)
         assertThat(body["rawWindow"]["messageCount"].asInt()).isEqualTo(2)
+        // 실제로 담긴 턴 수와 글자 수(§6.1 예산과 견주는 값). 가상 입력은 세지 않는다
+        assertThat(body["rawWindow"]["turnCount"].asInt()).isEqualTo(1)
+        assertThat(body["rawWindow"]["chars"].asInt()).isEqualTo(4)
     }
 
     @Test

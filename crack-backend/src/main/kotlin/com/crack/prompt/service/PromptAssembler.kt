@@ -28,7 +28,7 @@ data class PromptSection(val slot: PromptSlot, val name: String, val content: St
  * @property messages 대화 원문(§6.1) + 맨 끝 유저 메시지. BOTTOM 섹션이 `[지시]` 블록으로 붙은 최종 형태
  * @property sections 조립 순서대로 모든 섹션(BOTTOM 포함)
  * @property activeCharacters CHARACTERS 슬롯에 들어간 인물(§6.2)
- * @property rawMessageCount 원문 범위에 든 저장 메시지 수(가상 입력 제외)
+ * @property rawMessageCount 원문 범위에 든 저장 메시지 수(가상 입력 제외). 턴 수와 글자 수는 [rawWindow]에 있다
  * @property activeKeywords KEYWORDS 슬롯에 들어간 키워드북 항목 제목(§8.3, 우선순위 순)
  */
 data class AssembledPrompt(
@@ -136,9 +136,10 @@ class PromptAssembler(
         if (!log.isInfoEnabled) return
         val sections = p.sections.joinToString(", ") { "${it.slot}/${it.name}=${it.chars}" }
         log.info(
-            "프롬프트 조립 storyId={} total={} system={} messages={}개/{}자 raw(after={}, recorded={}, {}개) characters={} keywords={} sections=[{}]",
+            "프롬프트 조립 storyId={} total={} system={} messages={}개/{}자 raw({}턴/{}자, {}개, after={}, recorded={}) characters={} keywords={} sections=[{}]",
             p.storyId, p.totalChars, p.systemChars, p.messages.size, p.messageChars,
-            p.rawWindow.afterTurn, p.rawWindow.recordedThroughTurn, p.rawMessageCount, p.activeCharacters, p.activeKeywords, sections,
+            p.rawWindow.turnCount, p.rawWindow.chars, p.rawMessageCount, p.rawWindow.afterTurn, p.rawWindow.recordedThroughTurn,
+            p.activeCharacters, p.activeKeywords, sections,
         )
     }
 }

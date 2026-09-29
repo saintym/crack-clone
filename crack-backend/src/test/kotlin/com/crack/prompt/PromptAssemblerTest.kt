@@ -176,20 +176,36 @@ class PromptAssemblerTest {
     }
 
     @Test
-    fun `원문은 마지막 기록 턴 - overlap 이후만 넣는다`() {
+    fun `원문은 글자 예산 안에서 최근 턴부터 담고 첫 기록 이후 프롤로그를 뺀다`() {
         messageService.appendAssistant(storyId, "프롤로그", kind = MessageKind.PROLOGUE)
         (1..12).forEach { turn("u$it", "a$it") }
 
         val before = assembler.assemble(storyId)
         assertThat(before.messages.first().content).isEqualTo("프롤로그")
         assertThat(before.rawMessageCount).isEqualTo(25)
+        assertThat(before.rawWindow.turnCount).isEqualTo(13)
+        assertThat(before.rawWindow.chars).isEqualTo(before.messageChars)
 
         recordedTurns.values[storyId] = 10
         val after = assembler.assemble(storyId)
-        assertThat(after.messages.first().content).isEqualTo("u9")
+        assertThat(after.messages.first().content).isEqualTo("u1")
         assertThat(after.rawWindow.recordedThroughTurn).isEqualTo(10)
-        assertThat(after.rawWindow.afterTurn).isEqualTo(8)
-        assertThat(after.rawMessageCount).isEqualTo(8)
+        assertThat(after.rawWindow.afterTurn).isEqualTo(0)
+        assertThat(after.rawMessageCount).isEqualTo(24)
+    }
+
+    @Test
+    fun `예산을 넘는 오래된 턴은 빠진다`() {
+        val long = "가".repeat(900)
+        (1..8).forEach { turn("u$it $long", "a$it $long") }
+
+        // 한 턴이 1,806자(903 + 903)다. 기본 예산 6,000자면 세 턴(5,418자)까지 들어가고 네 턴째는 넘는다
+        val p = assembler.assemble(storyId)
+
+        assertThat(p.rawWindow.turnCount).isEqualTo(3)
+        assertThat(p.rawWindow.chars).isLessThanOrEqualTo(6000)
+        assertThat(p.messages.first().content).startsWith("u6 ")
+        assertThat(p.rawMessageCount).isEqualTo(6)
     }
 
     @Test
