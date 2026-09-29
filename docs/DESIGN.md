@@ -443,6 +443,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
   ```
 - **`state.json`:** `{"companions": ["설월"], "location": "흑풍채 근처 숲", "time": "3일차 밤", "updatedAtTurn": 30}`
 - **예산(글자 수, 설정값):** 인물 `## 기억` 3000, 주인공 `## 변화 기록` 4000, 연대기 회차 원문 12000. 키는 `crack.memory.budget.character|protagonist|chronicle`(T05에서 확정). 넘으면 파이프라인이 압축 단계를 추가로 실행한다.
+- **연대기 압축 트리거(D45):** 글자 예산 말고 **회차 수**로도 압축한다. 회차가 `crack.memory.record.chronicle-max-entries`(기본 4)를 넘으면 글자 예산 밑이어도 오래된 회차를 `## 장 요약`으로 접는다. 회차 수로 걸리면 목표 개수까지 한 번에 접고(`size - target`), 글자 예산으로만 걸리면 절반을 접는다. 둘 중 큰 쪽을 쓰며 **최근 1개는 반드시 남긴다.** 설정이 0 이하면 회차 수 트리거를 끈다. 압축 사유와 접은 개수는 INFO 로그로 남는다.
 - **T05 제공 API:** `readSection`, `replaceSection`(없으면 끝에 추가), `parseAliases`, `Chronicle.append/split/compactOldest`, `StoryState` 읽기·쓰기, 예산 검사.
 
 ### 7.2 파이프라인 (T14)
@@ -461,7 +462,7 @@ trigger(storyId, reason)
    입력: 해당 인물 문서 전체 · 대상 원문 · 기록 기준(§7.4)
    출력: <memory>(새 ## 기억 섹션 전체) · <protagonist_changes>
 ③ 주인공 반영 (RECORD, 1회): ②의 protagonist_changes 전부 + 현재 ## 변화 기록 → <changes>(새 섹션 전체)
-④ 예산 초과 시 압축 (RECORD): 해당 섹션이나 연대기 오래된 회차만 압축
+④ 압축 (RECORD): 인물 `## 기억`·주인공 `## 변화 기록`은 글자 예산을 넘으면, 연대기는 글자 예산 또는 회차 수를 넘으면 오래된 회차만 압축
 ⑤ 원자적 반영: 결과를 모두 메모리에 모은 뒤 → before 스냅샷 저장 → 파일 쓰기 → DONE,
    recorded_through = to, changed_files 기록
    · 어느 단계든 실패하면 파일을 하나도 쓰지 않고 FAILED (1회 재시도 후)
@@ -493,7 +494,7 @@ trigger(storyId, reason)
 - `lastRecordId`: 가장 최근 기록 ID(없으면 null)
 - `unseen`: 읽음 처리되지 않은 DONE 또는 FAILED 기록이 있으면 true
 
-**설정 키** (`crack.memory.record.*`): `every-turns`(10), `concurrency`(3, 캐릭터 관리자 동시 실행 수), `max-attempts`(2 = 최초 1회 + 재시도 1회), `chronicle-context-entries`(2, 시나리오 관리자에 넣는 최근 회차 수), `auto-enabled`(true, 10턴 자동 트리거).
+**설정 키** (`crack.memory.record.*`): `every-turns`(10), `concurrency`(3, 캐릭터 관리자 동시 실행 수), `max-attempts`(2 = 최초 1회 + 재시도 1회), `chronicle-context-entries`(2, 시나리오 관리자에 넣는 최근 회차 수), `chronicle-max-entries`(4, 원문으로 남길 최근 회차 수. 넘으면 압축한다. 0 이하면 끔), `auto-enabled`(true, 10턴 자동 트리거).
 
 ### 7.3 LLM 출력 형식
 각 관리자는 XML 태그 블록으로 답한다. 파서는 태그가 없거나 비어 있으면 실패로 처리한다. 태그 밖의 글은 무시한다. 본문이 코드 펜스로 감싸여 있으면 벗긴다.

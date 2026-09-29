@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Configuration
  *       concurrency: 3                # 캐릭터 관리자 동시 실행 수
  *       max-attempts: 2               # 최초 1회 + 재시도 1회
  *       chronicle-context-entries: 2  # 시나리오 관리자에 넣는 연대기 최근 회차 수
+ *       chronicle-max-entries: 4      # 원문으로 남길 최근 회차 수. 넘으면 오래된 것부터 장 요약으로 접는다
  * ```
  */
 @ConfigurationProperties(prefix = "crack.memory.record")
@@ -25,6 +26,7 @@ data class MemoryRecordProperties(
     val concurrency: Int = 3,
     val maxAttempts: Int = 2,
     val chronicleContextEntries: Int = 2,
+    val chronicleMaxEntries: Int = 4,
 )
 
 @Configuration
