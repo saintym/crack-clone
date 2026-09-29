@@ -27,6 +27,18 @@ object ImportPrompts {
         append("\n=== 페이지 자료 끝 ===\n")
     }
 
+    /**
+     * 페이지를 맥락으로 쓰는 단계 프롬프트 묶음 (T28).
+     * [ScenarioBuildPipeline]은 입력원을 모르고 이 인터페이스만 본다.
+     */
+    fun forPage(page: ExtractedPage, answers: String): ScenarioBuildPrompts = object : ScenarioBuildPrompts {
+        override fun system(): String = ImportPrompts.system(page)
+        override fun worldStep(): String = ImportPrompts.worldStep(answers)
+        override fun charactersStep(names: List<String>): String = ImportPrompts.charactersStep(names, answers)
+        override fun protagonistStep(characterNames: List<String>): String =
+            ImportPrompts.protagonistStep(answers, characterNames)
+    }
+
     /** 1단계 분석. JSON 하나를 받는다. */
     fun analyze(): String =
         """

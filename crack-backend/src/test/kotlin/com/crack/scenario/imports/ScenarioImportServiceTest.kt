@@ -86,14 +86,15 @@ class ScenarioImportServiceTest {
         repository = mock()
         jobs = ImportJobStore(properties)
         executors = ImportExecutors(properties)
+        val workspace = ImportWorkspace(dataPaths)
         service = ScenarioImportService(
             fetcher = mock(),
             extractor = HtmlExtractor(properties),
             gateway = gateway,
             jobs = jobs,
-            workspace = ImportWorkspace(dataPaths),
+            workspace = workspace,
             executors = executors,
-            properties = properties,
+            pipeline = ScenarioBuildPipeline(gateway, workspace, executors, properties, repository),
             scenarioRepository = repository,
             objectMapper = ObjectMapper(),
         )

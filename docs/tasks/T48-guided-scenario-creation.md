@@ -1,6 +1,6 @@
 # T48 질문으로 시나리오 만들기 — 백엔드
 
-- **상태**: TODO
+- **상태**: REVIEW
 - **웨이브**: 8
 - **의존**: T28(URL 가져오기 — 파이프라인을 재사용한다), T35(인지 범위), T45(주인공 규칙)
 - **브랜치**: `task/T48-guided-scenario-creation`
@@ -128,3 +128,31 @@ crack:
 - 질문을 **세션 대화로 볼지 라운드로 볼지.** 라운드로 잡았다. 자유 대화는 언제 끝나는지 모호하고 상한을 걸기 어렵다
 
 ## 작업 로그
+
+### 2026-09-30 (백엔드 구현, REVIEW)
+
+**한 일**
+- 공용 파이프라인 분리: `ScenarioBuildPipeline`(+`ScenarioBuildPrompts` 인터페이스, `ScenarioBuildSpec`)을 새로 만들고 `ScenarioImportService.generate`가 그리로 위임하게 했다. `JobCache`(TTL 캐시)와 `SseEventSink`도 공용으로 갈라냈다.
+- `ImportDocs`에 옵션 셋 추가: `character(..., withKnown = true)` → `## 알고 있는 것` 보장, `protagonist(..., withPrivate = true)` → `(비공개)` 섹션 보장, `imagePlaceholders(...)` → 주소 없는 `images.md`, `originLine(...)` → URL 아닌 출처 줄. **기본값은 전부 꺼져 있어 T28 생성물은 한 글자도 달라지지 않는다.**
+- 새 흐름 `com.crack.scenario.imports.guided`: `CreateProperties`(`crack.create.*`), `CreateDtos`, `CreateJobStore`, `CreatePrompts`, `CreateOutputParser`, `ScenarioCreateService`, `ScenarioCreateController`(API 3개).
+- 문서: `docs/DESIGN.md` §11을 "시나리오 자동 생성"으로 넓히고(입력원 비교표 + 패키지 나누기) §11.6 추가, `Plan-roadmap.md`에 D47.
+
+**설계 판단과 이유**
+- **패키지는 옮기지 않았다.** 공용은 `imports` 바로 아래에 두고 질의응답만 하위 패키지 `imports.guided`로 뺐다. `imports` 전체를 `scenario.build` 같은 이름으로 옮기면 T28 파일 13개가 전부 움직여 병렬 작업·리뷰와 충돌한다. 얻는 것은 이름뿐이라 값이 맞지 않는다. 대신 무엇이 공용이고 무엇이 입력원별인지를 DESIGN §11 머리에 표로 적었다.
+- **범위 밖 수정(같은 범위 안이지만 T28 파일을 건드린 것):** `ScenarioImportService`(생성 본체를 파이프라인으로 옮기고 위임), `ImportJobStore`(`JobCache` 위임), `ImportPrompts`(`forPage` 추가), `ImportDocs`(기본 인자 추가), `ScenarioImportServiceTest`(생성자에 `pipeline` 추가). **T28의 겉보기 동작과 생성물은 그대로**이고 기존 테스트가 전부 통과한다.
+- **라운드 상한을 "넘어선" 호출이 마무리다.** `max-rounds: 3`이면 질문 라운드 3번을 다 쓰고 4번째 호출에서 "더 묻지 말라"고 지시해 미리보기를 받는다. 상한에 닿은 라운드를 마무리로 쓰면 실제 질문은 2번뿐이 된다.
+- **빈 답은 프롬프트에서 `(답하지 않았다. 네가 정한다)`로 바뀐다.** 되묻지 않는다(몰입이 먼저다).
+- **답을 먼저 저장하고 LLM을 부른다.** 형식이 깨져 502가 나도 사용자가 같은 답을 다시 보내면 이어진다(라운드는 늘지 않는다).
+- **질문이 하나도 없는 응답은 done으로 본다**(`CreateOutputParser`). 빈 질문 화면을 보여 줄 수는 없다. 이때 미리보기가 없으면 502다.
+- `## 첫 인사`를 "두세 문장짜리 말투 샘플"로 못 박았다(D46). T28이 겪은 문제를 새 흐름이 되풀이하지 않게.
+
+**확인한 방법**
+- `cd crack-backend && ./gradlew test` → **632개 전부 통과**(기준선 616 + 새 16).
+- 새 테스트: `ScenarioCreateServiceTest` 13개(스텁 게이트웨이로 라운드·생성·실패·이름 검사), `ScenarioCreateApiTest` 3개(`FakeAiProvider`로 start → answer ×3 → confirm SSE까지 HTTP 전 흐름, `asyncDispatch`까지 실행).
+- 생성물이 `CharacterDoc`·`ProtagonistDoc`·`KeywordBookParser`·`ImageCatalogParser`로 읽히는 것, 인물 문서에 `## 알고 있는 것`이, 주인공 문서에 `(비공개)`가 들어가는 것(LLM이 빠뜨린 경우 포함), 지운 인물이 만들어지지 않는 것, 중간 실패 시 폴더·임시 폴더·DB에 흔적이 없는 것을 테스트로 고정했다.
+
+**다음 작업자가 알아야 할 것**
+- 화면은 [T49](./T49-guided-creation-ui.md)다. 응답 DTO는 start와 answer가 **같은 형식**(`CreateRoundResponse`)이다 — `done`이 false면 `questions`, true면 `preview`와 예상치를 본다.
+- `crack.create.*`는 기본값이 있어 `application.yml`에 적지 않아도 돈다.
+- T28 생성물에는 아직 `## 알고 있는 것`이 없다(옵션이 꺼져 있다). URL 가져오기에도 켤지는 별도 판단이 필요하다 — 켜면 T28 테스트의 기대 문서가 바뀐다.
+- 질의응답 중간 상태는 서버 메모리에만 있다(TTL 30분). 서버를 다시 띄우면 씨앗부터 다시 해야 한다.
