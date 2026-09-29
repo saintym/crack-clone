@@ -301,16 +301,25 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 - **`crack.prompt.overlap-turns`는 없앴다(T47).** "마지막 기록 턴 − overlap 초과만 넣는다"는 규칙은 기록 직후 원문을 2턴으로 줄여 예산을 거의 쓰지 못하게 만든다. 크기는 이제 예산이 잡고, "최소 몇 턴은 남긴다"는 몫은 `raw-min-turns`가 받는다. 기록된 구간이 원문에 남는 것은 중복이 아니라 연속성이다 — 기억 문서는 요약이고 원문은 말투와 세부를 지킨다.
 
 ### 6.2 활성 인물 선택 (D9)
-`state.json.companions` ∪ `KeywordMatcher`가 `recentText`에서 찾은 인물(파일명과 `별칭`).
-- 순서: 동행 인물(`companions` 순서) → 키워드로 찾은 인물(파일명 순). 중복은 한 번만.
+`state.json.companions` ∪ `settings.json.alwaysActive` ∪ `KeywordMatcher`가 `recentText`에서 찾은 인물(파일명과 `별칭`).
+- 순서: 동행 인물(`companions` 순서) → 늘 곁에 있는 인물(`alwaysActive` 순서) → 키워드로 찾은 인물(파일명 순). 중복은 한 번만.
 - **주인공은 활성 인물에 넣지 않는다.** `PROTAGONIST` 슬롯이 언제나 따로 넣으므로, 이 목록과 `prompt-preview`의 `activeCharacters`에는 주인공이 들어가지 않는다(구현과 일치하도록 T22에서 문구를 고쳤다).
 - `companions`의 이름은 파일명과 먼저 비교하고, 없으면 별칭과 정확히 같은 인물을 쓴다. 둘 다 없으면 버린다.
 - **수 상한: `crack.prompt.max-active-characters`(기본 6). 0 이하면 끈다** (T44).
   **인물 문서가 프롬프트에서 가장 비싼 부분이다** — 실측 1명당 약 1,460자. 상한이 없으면 한 턴에 인물 이름이 여러 개 나올 때
   25명 전체가 들어와 `characters`만 36,000자가 된다(6명이면 약 8,800자).
-  **순서가 곧 우선순위다** — 동행 인물이 먼저 남고 키워드로 걸린 인물부터 잘린다. 잘리면 INFO 로그로 버린 인물을 남긴다.
-- **이름이 한 글자인 인물은 키워드로 잡히지 않는다.** `KeywordMatcher.MIN_KEY_LENGTH`가 2다.
-  두 글자 이상인 파일명이나 별칭을 두거나, `companions`로 넣어야 한다.
+  **순서가 곧 우선순위다** — 동행 인물과 `alwaysActive`가 먼저 남고 키워드로 걸린 인물부터 잘린다. 잘리면 INFO 로그로 버린 인물을 남긴다.
+- **늘 곁에 있는 인물: `settings.json`의 `alwaysActive`** (T50, D48). 언급이 없어도 활성 인물에 넣는다.
+  ```json
+  { "alwaysActive": ["시즈카", "렌"] }
+  ```
+  - 이름은 `companions`와 같은 규칙이다 — 파일명과 먼저 비교하고, 없으면 별칭이 정확히 같은 인물을 쓴다.
+    둘 다 없으면 버리고 **경고 로그**를 남긴다. 값이 없으면 예전과 똑같이 동작한다.
+  - `settings.json`은 스토리를 만들 때 시나리오에서 복사되므로(`StoryFiles.COPIED_FILES`) 새 스토리마다 손댈 필요가 없다.
+    `state.json.companions`는 스토리마다 손으로 넣어야 한다 — 그것이 이 필드를 둔 이유다.
+  - 전속 호위·동료처럼 **장면에 늘 있는 인물**을 키워드 운에 맡기지 않는다. 이름이 한 글자인 인물의 확실한 탈출구이기도 하다.
+- **이름이 한 글자인 인물도 키워드로 잡힌다** (T50, D48). 1글자 키는 **낱말 처음에서만** 맞는다(§8.4).
+  `렌즈`처럼 그 글자로 시작하는 낱말은 여전히 오탐이므로, 늘 있는 인물은 `alwaysActive`로 넣는 것이 확실하다.
 - 구현: `prompt.contributor.ActiveCharacterSelector`.
 
 ### 6.3 크기 측정
@@ -341,6 +350,7 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
   ```json
   { "responseChars": { "min": 1200, "max": 2200 } }
   ```
+  - 같은 파일의 다른 필드: `maxCharacterImages`(T40, §8.5), `alwaysActive`(T50, §6.2).
   - 시나리오 원본에 `settings.json`이 있으면 스토리를 만들 때 복사한다(`StoryFiles.COPIED_FILES`). 플레이 중에는 스토리 폴더의 파일만 읽는다(D12).
   - 모르는 필드는 무시한다. 파일이 없거나 `responseChars`가 없으면 전역 기본값을 쓴다.
   - 값이 깨졌거나(JSON 오류) 범위가 이상하면(`min` ≤ 0, `min` > `max`, `max` > 20000) **경고 로그를 남기고 전역 기본값**을 쓴다. 턴은 실패시키지 않는다.
@@ -639,7 +649,7 @@ trigger(storyId, reason)
   (주입할 내용)
   ```
   위에 있는 항목이 우선한다.
-- **매칭:** `KeywordMatcher`(T06)가 `recentText`에서 찾는다.
+- **매칭:** `KeywordMatcher`(T06)가 `recentText`에서 찾는다. 1글자 키워드는 낱말 처음에서만 맞는다(§8.4, T50).
 - **동시 발동 수:** 설정값 `crack.prompt.keyword-max-active`(기본 3)
 - **주입 위치:** KEYWORDS 슬롯. 기여자 `prompt.keyword.KeywordBookContributor`(order 0, name `keyword_book`), 선택은 `prompt.keyword.KeywordBook`(T17).
   ```
@@ -660,7 +670,22 @@ class KeywordMatcher {
 }
 ```
 - 부분 문자열 매칭을 쓴다. 한국어 조사 때문이다("설월이"도 "설월"에 매칭).
-- 2글자 미만 키는 무시하고, 대소문자는 구분하지 않는다.
+- 대소문자는 구분하지 않고, 키의 앞뒤 공백은 지운다. 남은 것이 없는 키는 무시한다.
+- **1글자 키는 낱말 처음에서만 맞는다** (T50, D48). 바로 앞 글자가 글자나 숫자면 낱말 안쪽으로 보고 버린다.
+  글자 수는 코드 포인트 기준이다(`KeywordMatcher.SHORT_KEY_LENGTH = 1`).
+
+  | 본문 | 키 `린` | 이유 |
+  |---|---|---|
+  | `그린` | ✗ | 앞이 `그` |
+  | `바이올린` | ✗ | 앞이 `올` |
+  | `린이 말했다` | ✓ | 문장 처음 |
+  | `토오사카 린은` | ✓ | 앞이 공백 |
+  | `"린."` | ✓ | 앞이 따옴표 |
+
+  **뒤 글자는 보지 않는다** — 한국어는 조사가 붙어서(`린이`, `렌은`) 뒤를 막으면 대부분 놓친다.
+  그래서 **그 글자로 시작하는 낱말**(`렌즈`, `린스`)은 남는 오탐이다. 예전에는 1글자 키를 아예 버렸는데,
+  그러면 이름이 한 글자인 인물의 문서가 프롬프트에서 통째로 빠졌다(§6.2).
+- **2글자 이상 키의 동작은 예전 그대로다**(단순 `contains`).
 
 ### 8.5 이미지 카탈로그 (T20, T27)
 - **`images.md`**(시나리오 원본, 스토리에서 참조): `- 설월_미소: https://…/a.webp | 설월이 옅게 웃는 모습`
