@@ -50,6 +50,7 @@
 | 8 | [T24](./T24-chronicle-compaction.md) | 연대기 압축 — 회차 수 기준 트리거 | T14 |
 | 8 | [T46](./T46-character-prompt-diet.md) | 인물 문서 프롬프트 다듬기 + 마스터 역할 | T35, T44, T45 |
 | 8 | [T47](./T47-raw-conversation-budget.md) | 대화 원문 범위를 글자 예산으로 | T13, T29 |
+| 8 | [T48](./T48-guided-scenario-creation.md) | 질문으로 시나리오 만들기 (URL 없이) | T28, T35, T45 |
 | 8 | [T25](./T25-deep-query-fallback.md) | 검색이 헛돈 턴의 깊은 질의 1회 | T24 |
 | 8 | [T27](./T27-image-auto-insert.md) | 인물 이미지 자동 삽입(V8) + 카탈로그 등록 UX | — |
 | 8 | [T28](./T28-scenario-import-from-url.md) | URL에서 시나리오 가져오기 (분석 → 질문 → 생성) | T27 |
