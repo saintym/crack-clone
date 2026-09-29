@@ -104,7 +104,7 @@ class PromptAssemblerTest {
 
         assertThat(p.sections.map { it.name }).containsExactly("base", "world", "scenario", "protagonist", "characters")
         val s = p.systemPrompt
-        val order = listOf("당신은 몰입형", "=== 세계관 ===", "=== 시나리오 ===", "=== 주인공(사용자) ===", "=== 캐릭터: 설월 ===")
+        val order = listOf("## 너의 역할 (롤플레이 마스터)", "=== 세계관 ===", "=== 시나리오 ===", "=== 주인공(사용자) ===", "=== 캐릭터: 설월 ===")
         assertThat(order.map { s.indexOf(it) }).allMatch { it >= 0 }.isSorted
         assertThat(p.systemChars).isEqualTo(s.length)
     }

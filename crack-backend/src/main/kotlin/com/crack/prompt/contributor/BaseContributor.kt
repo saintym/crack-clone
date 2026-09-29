@@ -7,7 +7,8 @@ import org.springframework.stereotype.Component
 import java.util.Locale
 
 /**
- * BASE: 기본 규칙 + 유저 입력 규칙 + 출력 형식 (DESIGN.md §6 기본 기여자).
+ * BASE: 롤플레이 마스터 역할 + 기본 규칙 + 주인공 규칙 + 인지 규칙 + 유저 입력 규칙 + 출력 형식
+ * (DESIGN.md §6 기본 기여자). 순서는 [text]가 정한다 — 역할을 맨 앞에 두어 먼저 규정한다(§6.6, D26).
  *
  * 출력 형식은 응답 첫 줄의 감정 태그와 인물 태그(§5.3)를 매번 요구한다. 태그는 [com.crack.chat.flow.EmotionTagFilter]가
  * 스트림에서 떼어 내므로 사용자에게 보이지 않는다. 인물 태그에 쓸 수 있는 이름과 변형 목록은
@@ -27,7 +28,26 @@ class BaseContributor(
         text(StorySettings.responseChars(ctx.storyDir, properties.responseChars))
 
     companion object {
-        const val RULES = """당신은 몰입형 소설/롤플레이 AI 작가입니다. 아래 설정과 규칙을 반드시 준수하세요.
+
+        /**
+         * 롤플레이 마스터 역할 (§6.6, D26). **BASE 맨 앞**에 두어 무엇을 하는 사람인지를 먼저 규정한다.
+         *
+         * 전에는 "몰입형 소설/롤플레이 AI 작가"라고만 했다. 무엇을 근거로 판단하는지, 모르는 것을 어떻게
+         * 다루는지, 어디까지 진행시켜도 되는지가 없어서 AI가 자료에 없는 설정을 지어내고 주인공이 없는
+         * 곳의 일을 임의로 굴렸다. 뒤따르는 절(주인공 규칙·인지 규칙)이 "하지 마라"라면 이 절은 "무엇을
+         * 하는 사람인가"다.
+         */
+        const val MASTER_RULES = """## 너의 역할 (롤플레이 마스터)
+
+너는 이 이야기의 **롤플레이 마스터**다. 주인공(사용자)이 한 일을 받아, 그 **주변의 시간·공간·인물**을 움직여 장면을 이어 가고 사건을 진행시킨다. 등장인물 전원과 세계가 너의 몫이고, 주인공만이 사용자의 몫이다.
+
+- **판단의 근거는 주어진 자료다** — 세계관, 시나리오, 연대기, 인물 문서, 그리고 아래 대화 원문. 여기에 없는 설정(지명, 조직, 인물, 과거 사건, 세계의 규칙)을 새로 만들어 내지 않는다.
+- **모르는 것은 장면 안에서 자연스럽게 비워 둔다.** 지어내는 것보다 비워 두는 것이 낫다. 인물이 말을 아끼거나, 화제를 돌리거나, 시야 밖에 두면 된다. 자료에 없다는 사실을 이야기 밖에서 설명하지는 마라.
+- **주인공이 없는 곳의 일을 임의로 진행시키지 않는다.** 장면은 주인공이 보고 듣는 자리에서 흐른다. 멀리서 벌어지는 일은 주인공에게 닿는 형태(소문, 전갈, 찾아온 사람)로만 들어온다.
+- 인물 문서의 `## 첫 인사`와 `## 대사 예시`는 **말투를 보여 주는 예시**다. 그 장면이나 그 문장을 재현하지 마라. 지금 장면에 맞는 말을 그 말투로 새로 쓴다.
+- 주인공은 연기하지 않고(아래 "주인공 규칙"), 인물이 무엇을 아는지는 지킨다(아래 "인지 규칙")."""
+
+        const val RULES = """아래 설정과 규칙을 반드시 준수하세요.
 
 ## 핵심 규칙
 1. 설정된 캐릭터의 성격, 말투, 배경을 일관되게 유지하세요.
@@ -134,7 +154,7 @@ class BaseContributor(
             OUTPUT_FORMAT.replace("{{RESPONSE_CHARS}}", responseCharsLine(chars))
 
         fun text(chars: ResponseChars): String =
-            listOf(RULES, PROTAGONIST_RULES, KNOWLEDGE_RULES, USER_INPUT_RULES, outputFormat(chars))
+            listOf(MASTER_RULES, RULES, PROTAGONIST_RULES, KNOWLEDGE_RULES, USER_INPUT_RULES, outputFormat(chars))
                 .joinToString("\n\n")
 
         /** `1500` → `1,500`. 로케일에 따라 달라지지 않게 고정한다. */
