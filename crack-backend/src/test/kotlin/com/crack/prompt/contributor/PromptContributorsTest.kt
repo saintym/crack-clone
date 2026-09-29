@@ -80,7 +80,44 @@ class PromptContributorsTest {
         assertThat(section).contains("\n\n=== 캐릭터: 설월 ===\n# 캐릭터: 설월")
     }
 
+    @Test
+    fun `인물 문서의 첫 인사에 말투 참고용 라벨이 붙고 원본 파일은 그대로다`() {
+        val file = storyDir.resolve("characters/설월.md")
+        val original = Files.readString(file) + "\n## 첫 인사\n\"용건을 말하세요. 짧게.\"\n"
+        Files.writeString(file, original)
+
+        val section = CharactersContributor(selector).contribute(ctx("설월"))!!
+
+        assertThat(section).contains("## ${GreetingSection.TITLE} ${GreetingSection.LABEL}")
+        assertThat(section).contains("\"용건을 말하세요. 짧게.\"")
+        assertThat(Files.readString(file)).isEqualTo(original) // 프롬프트에 넣을 때만 붙인다
+    }
+
+    @Test
+    fun `첫 인사가 없는 인물 문서도 그대로 들어간다`() {
+        val section = CharactersContributor(selector).contribute(ctx("설월"))!!
+
+        assertThat(section).doesNotContain(GreetingSection.LABEL)
+        assertThat(section).contains("존댓말. 짧게 끊어 말한다.")
+    }
+
     // ---- 문서 기여자 ----
+
+    @Test
+    fun `BASE는 롤플레이 마스터 역할을 맨 앞에 둔다`() {
+        val base = BaseContributor().contribute(ctx())!!
+
+        assertThat(base).startsWith("## 너의 역할 (롤플레이 마스터)")
+        assertThat(base.indexOf("## 너의 역할")).isLessThan(base.indexOf("## 핵심 규칙"))
+        assertThat(base.indexOf("## 너의 역할")).isLessThan(base.indexOf("## 주인공 규칙"))
+        assertThat(base.indexOf("## 너의 역할")).isLessThan(base.indexOf("## 인지 규칙"))
+        // 판단 근거와 모르는 것 처리, 오프스크린 금지
+        assertThat(base).contains("판단의 근거는 주어진 자료다")
+        assertThat(base).contains("모르는 것은 장면 안에서 자연스럽게 비워 둔다")
+        assertThat(base).contains("주인공이 없는 곳의 일을 임의로 진행시키지 않는다")
+        // 첫 인사·대사 예시는 재현 대상이 아니다
+        assertThat(base).contains("`## 첫 인사`와 `## 대사 예시`는 **말투를 보여 주는 예시**다")
+    }
 
     @Test
     fun `BASE는 유저 입력 규칙과 감정 태그 출력 형식을 담는다`() {
