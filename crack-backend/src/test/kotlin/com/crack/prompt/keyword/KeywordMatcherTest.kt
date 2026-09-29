@@ -29,21 +29,48 @@ class KeywordMatcherTest {
     }
 
     @Test
-    fun `2글자 미만 키는 무시한다`() {
+    fun `빈 키는 무시한다`() {
         val entries = listOf(
-            KeywordEntry("짧은키", listOf("월", " 설 ", "", "   ")),
-            KeywordEntry("영문한글자", listOf("a")),
-            KeywordEntry("정상", listOf("월", "설월")),
+            KeywordEntry("빈키", listOf("", "   ")),
+            KeywordEntry("정상", listOf("설월")),
         )
-        val text = "설월과 a가 달을 본다. 월"
-        assertEquals(listOf("정상"), matcher.match(entries, text))
+        assertEquals(listOf("정상"), matcher.match(entries, "설월과 달"))
     }
 
     @Test
-    fun `2글자 판정은 코드 포인트 기준이다`() {
-        // 이모지 하나는 UTF-16으로 2 char지만 1글자로 본다.
-        val entries = listOf(KeywordEntry("emoji", listOf("😀")), KeywordEntry("emoji2", listOf("😀😀")))
-        assertEquals(listOf("emoji2"), matcher.match(entries, "웃음 😀😀"))
+    fun `1글자 키는 낱말 안쪽에서 맞지 않는다`() {
+        val entries = listOf(KeywordEntry("린", listOf("린")))
+        assertEquals(emptyList<String>(), matcher.match(entries, "그린 하늘"))
+        assertEquals(emptyList<String>(), matcher.match(entries, "바이올린 소리가 들렸다"))
+        assertEquals(emptyList<String>(), matcher.match(entries, "훈련은 계속됐다")) // "련"은 다른 음절이라 애초에 안 걸린다
+        // 앞 글자가 영문이나 숫자여도 낱말 안쪽으로 본다.
+        assertEquals(emptyList<String>(), matcher.match(listOf(KeywordEntry("a", listOf("a"))), "bar에서 만났다"))
+    }
+
+    @Test
+    fun `1글자 키는 낱말 처음이면 맞는다`() {
+        val entries = listOf(KeywordEntry("린", listOf("린")))
+        assertEquals(listOf("린"), matcher.match(entries, "린이 말했다"))          // 문장 처음
+        assertEquals(listOf("린"), matcher.match(entries, "토오사카 린은 웃었다")) // 앞이 공백
+        assertEquals(listOf("린"), matcher.match(entries, "\"린.\" 하고 불렀다"))  // 앞이 따옴표
+        assertEquals(listOf("린"), matcher.match(entries, "그린 하늘 아래 린이 섰다")) // 앞쪽 오탐 뒤에도 찾는다
+    }
+
+    @Test
+    fun `1글자 판정은 코드 포인트 기준이다`() {
+        // 이모지 하나는 UTF-16으로 2 char지만 1글자라 낱말 경계 규칙을 받는다.
+        val emoji = listOf(KeywordEntry("emoji", listOf("😀")))
+        assertEquals(listOf("emoji"), matcher.match(emoji, "웃음 😀"))
+        assertEquals(emptyList<String>(), matcher.match(emoji, "웃음😀")) // 앞이 한글 음절
+        // 2글자면 예전처럼 단순 contains다.
+        assertEquals(listOf("emoji2"), matcher.match(listOf(KeywordEntry("emoji2", listOf("😀😀"))), "웃음😀😀"))
+    }
+
+    @Test
+    fun `2글자 이상 키는 낱말 안쪽이어도 맞는다`() {
+        // 회귀 방지: 1글자 규칙이 긴 키에 새지 않는다.
+        val entries = listOf(KeywordEntry("설월", listOf("설월")), KeywordEntry("천마", listOf("천마")))
+        assertEquals(listOf("설월", "천마"), matcher.match(entries, "가설월광천마신교"))
     }
 
     @Test
