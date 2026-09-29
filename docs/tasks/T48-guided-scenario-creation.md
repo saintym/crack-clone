@@ -1,9 +1,10 @@
-# T48 질문으로 시나리오 만들기
+# T48 질문으로 시나리오 만들기 — 백엔드
 
 - **상태**: TODO
 - **웨이브**: 8
 - **의존**: T28(URL 가져오기 — 파이프라인을 재사용한다), T35(인지 범위), T45(주인공 규칙)
 - **브랜치**: `task/T48-guided-scenario-creation`
+- **화면**: [T49](./T49-guided-creation-ui.md)가 맡는다. 이 작업은 **백엔드만** 한다
 - **마이그레이션**: 없음
 - **결정**: D47
 
@@ -30,7 +31,6 @@
 - `crack-backend/src/main/kotlin/com/crack/scenario/imports/**` — 공용 부분 분리 + 새 흐름
   - 재사용: `ImportDocs`(문서 포맷), `ImportOutputParser`, `ImportJobStore`(TTL 캐시), SSE 이벤트(`ImportStepEvent`/`ImportDoneEvent`), 원자적 생성
   - 신규: 질의응답 라운드 관리, 새 프롬프트, 새 컨트롤러
-- `crack-frontend/src/api/`, `crack-frontend/src/components/scenario/` — 새 시트
 - `docs/DESIGN.md`(§11을 "시나리오 생성"으로 넓히고 §11.5 추가), `Plan-roadmap.md`(D47)
 - 테스트
 
@@ -109,12 +109,7 @@ crack:
 인물 배치·동시 실행은 `crack.import.*`를 그대로 쓴다(같은 파이프라인이다).
 
 ## 화면
-`components/scenario/ScenarioCreateSheet.tsx`(신규). `ScenarioImportSheet.tsx`와 나란히 두고, 시나리오 목록 화면에서 **「URL에서 가져오기」와 「질문으로 만들기」 두 버튼**을 준다.
-
-- seed 입력 → 질문 카드(라운드마다) → 미리보기 → 이름 확인 → 생성 진행(SSE 진행률)
-- **빈 답을 허용한다.** "모르겠어요, 알아서 정해주세요" 버튼을 둔다
-- 미리보기에서 **인물 목록을 지우고 더할 수 있게** 한다
-- 진행 중에 이탈해도 서버는 계속 만든다(T28과 같다)
+[T49](./T49-guided-creation-ui.md)가 맡는다. 이 작업은 API까지만 한다.
 
 ## 완료 조건
 - [ ] seed 한 줄로 시작해 질문 → 답 → 미리보기 → 생성까지 끝난다
@@ -125,7 +120,7 @@ crack:
 - [ ] 인물 문서에 `## 알고 있는 것`이, 주인공 문서에 `(비공개)` 섹션이 들어간다
 - [ ] 중간 실패 시 시나리오가 남지 않는다(원자적 생성)
 - [ ] 없는/만료된 `jobId`는 404, 이미 있는 이름은 confirm에서 400
-- [ ] `./gradlew test` 전부 통과, 프론트 build·lint 통과
+- [ ] `./gradlew test` 전부 통과
 - [ ] Fake 프로바이더로 전 흐름 통합 테스트
 
 ## 착수 전에 정할 것
