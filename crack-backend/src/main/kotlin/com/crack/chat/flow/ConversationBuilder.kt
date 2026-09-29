@@ -13,17 +13,25 @@ import org.springframework.stereotype.Component
 /**
  * 대화 원문 범위 (DESIGN.md §6.1). `turn_no > afterTurn`인 메시지만 넣는다.
  *
- * @property recordedThroughTurn 계산에 쓴 마지막 기록 턴
+ * @property recordedThroughTurn 계산에 쓴 마지막 기록 턴(프롤로그를 뺄지 정할 때만 쓴다)
  * @property afterTurn 이 턴 **초과**만 넣는다. 음수면 프롤로그(턴 0)까지 들어간다
+ * @property turnCount 실제로 담긴 턴 수
+ * @property chars 실제로 담긴 글자 수(저장된 메시지 내용의 합, 지시와 가상 입력은 빼고)
  */
-data class RawWindow(val recordedThroughTurn: Int, val afterTurn: Int) {
+data class RawWindow(
+    val recordedThroughTurn: Int,
+    val afterTurn: Int,
+    val turnCount: Int = 0,
+    val chars: Int = 0,
+) {
     fun includes(turn: Int): Boolean = turn > afterTurn
 }
 
 /**
  * 메시지 저장소(T03)에서 AI 입력 메시지를 만든다.
  *
- * - **원문 범위(§6.1, T13):** `turn_no > recorded_through_turn - overlap`, 상한은 최근 `max-raw-turns`턴.
+ * - **원문 범위(§6.1, T13 → T47):** 최근 턴부터 거꾸로 `crack.prompt.raw-budget-chars` 글자 예산 안에서 담는다.
+ *   턴은 쪼개지 않고, 예산을 넘겨도 `raw-min-turns`턴은 넣으며, 안전 상한은 최근 `max-raw-turns`턴이다.
  *   기록한 적이 있으면(`recorded_through_turn >= 1`) 프롤로그(턴 0)는 뺀다. 마지막 기록 턴은 [RecordedTurnSource] 빈에서
  *   읽고, 빈이 없으면 0으로 본다(T14 전).
  * - 저장된 `content`는 감정 태그가 빠진 상태이므로 그대로 넘긴다(§5.3).
@@ -52,9 +60,10 @@ class ConversationBuilder(
     /** [views]에 대한 원문 범위. 기준 최대 턴은 [views] 중 최대 턴이다. */
     fun rawWindow(storyId: Long, views: List<MessageView>): RawWindow =
         rawWindow(
+            views = views,
             recordedThroughTurn = recordedThroughTurn(storyId),
-            maxTurn = views.maxOfOrNull { it.turn } ?: 0,
-            overlapTurns = properties.overlapTurns,
+            budgetChars = properties.rawBudgetChars,
+            minTurns = properties.rawMinTurns,
             maxRawTurns = properties.maxRawTurns,
         )
 
@@ -107,16 +116,43 @@ class ConversationBuilder(
                 .ifEmpty { null }
 
         /**
-         * 원문 범위 계산 (DESIGN.md §6.1).
+         * 원문 범위 계산 — 글자 예산 (DESIGN.md §6.1, T47).
          *
-         * `afterTurn = max(recorded - overlap, maxTurn - maxRaw)`. 기록한 적이 있으면 0 이상(프롤로그 제외).
-         * [maxRawTurns]는 1 이상, [overlapTurns]는 0 이상으로 보정한다.
+         * 최근 턴부터 거꾸로 담고 누적 글자 수가 [budgetChars]를 넘으면 그 턴 앞에서 멈춘다.
+         *
+         * - **턴을 쪼개지 않는다.** 같은 `turn_no`의 메시지(유저 입력과 그 응답, 이어쓰기)는 함께 들어가거나 함께 빠진다
+         * - **[minTurns]턴은 예산을 넘겨도 넣는다.** 한 턴이 예산보다 길 수 있다. 1 미만은 1로 본다
+         * - 안전 상한 [maxRawTurns](1 이상으로 보정): 예산이 남아도 최근 이 턴 수까지만 담는다
+         * - [recordedThroughTurn]이 1 이상이면 프롤로그(턴 0)를 뺀다. 이미 연대기에 남았기 때문이다
          */
-        fun rawWindow(recordedThroughTurn: Int, maxTurn: Int, overlapTurns: Int, maxRawTurns: Int): RawWindow {
+        fun rawWindow(
+            views: List<MessageView>,
+            recordedThroughTurn: Int,
+            budgetChars: Int,
+            minTurns: Int,
+            maxRawTurns: Int,
+        ): RawWindow {
             val recorded = recordedThroughTurn.coerceAtLeast(0)
-            var after = maxOf(recorded - overlapTurns.coerceAtLeast(0), maxTurn - maxRawTurns.coerceAtLeast(1))
-            if (recorded >= 1) after = maxOf(after, 0)
-            return RawWindow(recorded, after)
+            val charsByTurn = views.groupingBy { it.turn }.fold(0) { acc, v -> acc + v.content.length }
+            val maxTurn = charsByTurn.keys.maxOrNull() ?: 0
+            // 하한: 안전 상한과 프롤로그 규칙. 이 턴 초과만 담을 수 있다
+            val lowest = maxOf(maxTurn - maxRawTurns.coerceAtLeast(1), if (recorded >= 1) 0 else -1)
+
+            val budget = budgetChars.coerceAtLeast(0)
+            val min = minTurns.coerceAtLeast(1)
+            var after = lowest
+            var chars = 0
+            var turns = 0
+            for (turn in charsByTurn.keys.filter { it > lowest }.sortedDescending()) {
+                val turnChars = charsByTurn.getValue(turn)
+                if (turns >= min && chars + turnChars > budget) {
+                    after = turn
+                    break
+                }
+                chars += turnChars
+                turns++
+            }
+            return RawWindow(recorded, after, turns, chars)
         }
     }
 }
