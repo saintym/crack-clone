@@ -18,6 +18,8 @@ import com.crack.message.repository.StoryMessageRepository
 import com.crack.message.service.MessageService
 import com.crack.prompt.service.AssembledPrompt
 import com.crack.prompt.service.PromptAssembler
+import com.crack.story.clock.ClockPoint
+import com.crack.story.clock.StoryClockService
 import com.crack.story.entity.Story
 import com.crack.story.repository.StoryRepository
 import org.slf4j.LoggerFactory
@@ -34,6 +36,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter
  * - **스토리당 생성 1개.** 생성 중에는 새 생성뿐 아니라 후보 선택·수정·삭제도 409로 막는다
  *   (생성 도중 대화가 바뀌어 응답이 엉뚱한 자리에 저장되는 것을 막는다).
  * - 첫 줄 감정·인물 태그는 [EmotionTagFilter]가 스트림에서 떼어 내고 `emotion`·`speaker`·`speaker_variant` 칼럼에만 저장한다(§5.3).
+ * - 첫 줄 시각·장소 태그는 [StoryClockService]가 단조 비감소를 강제해 확정한 뒤 `story_time`·`place` 칼럼과
+ *   `state.json`에 남긴다(§5.4, T38). **시계 때문에 턴이 실패하지는 않는다** — 값을 정하지 못하면 비워 둔다.
  * - 프롬프트는 [PromptAssembler](v2, DESIGN.md §6)가 만든다. 이번 턴 지시는 BOTTOM 슬롯(`[지시]` 블록)으로 들어간다.
  * - 사용자 정의 `/` 명령(T16, DESIGN.md §8.2)은 유저 메시지를 `COMMAND`로 저장하고, 명령 프롬프트를 그 턴의 지시로만 넣는다.
  *   그 턴을 재생성할 때도 같은 지시를 다시 넣는다.
@@ -50,6 +54,7 @@ class ChatFlowService(
     private val afterTurnHooks: ObjectProvider<AfterTurnHook>,
     private val memoryRecordService: MemoryRecordService,
     private val commandService: CommandService,
+    private val storyClockService: StoryClockService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -159,7 +164,10 @@ class ChatFlowService(
     fun selectVariant(storyId: Long, messageId: Long, index: Int): MessageView =
         withMutation(storyId) {
             requireMessageInStory(storyId, messageId)
-            messageService.view(messageService.selectVariant(messageId, index))
+            val selected = messageService.selectVariant(messageId, index)
+            // 고른 후보의 시각으로 시계를 맞춘다. 값이 없는 후보(시계를 쓰지 않는 스토리)는 건드리지 않는다 (T38)
+            selected.storyTime?.let { storyClockService.moveTo(storyId, ClockPoint(it, selected.place)) }
+            messageService.view(selected)
         }
 
     fun edit(storyId: Long, messageId: Long, content: String?): MessageView {
@@ -217,7 +225,13 @@ class ChatFlowService(
             storyId = story.id,
             emitter = emitter,
             ticket = ticket,
-            save = { body, tags -> messageService.view(save(body, tags)) },
+            save = { body, tags ->
+                // 이야기 속 시각·장소를 확정한 뒤 저장하고, 저장이 끝나면 state.json의 시계를 옮긴다 (T38)
+                val stamped = storyClockService.stamp(story.id, tags)
+                val saved = save(body, stamped)
+                storyClockService.commit(story.id, stamped)
+                messageService.view(saved)
+            },
             afterSave = { saved -> runAfterTurnHooks(story.id, saved, mode) },
         )
         val filter = EmotionTagFilter(listener)

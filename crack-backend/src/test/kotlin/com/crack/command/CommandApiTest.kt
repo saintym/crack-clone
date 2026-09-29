@@ -136,8 +136,8 @@ class CommandApiTest {
         val body = perform(get("/api/stories/$storyId/commands"), status().isOk)!!
 
         assertThat(body.map { it["name"].asText() to it["type"].asText() })
-            .containsExactly("기록" to "SYSTEM", "ooc" to "SYSTEM", "일기" to "CUSTOM")
-        assertThat(body[2]["description"].asText()).isEqualTo("주인공의 하루를 일기 형식으로 정리")
+            .containsExactly("기록" to "SYSTEM", "ooc" to "SYSTEM", "시간" to "SYSTEM", "일기" to "CUSTOM")
+        assertThat(body.last()["description"].asText()).isEqualTo("주인공의 하루를 일기 형식으로 정리")
     }
 
     @Test

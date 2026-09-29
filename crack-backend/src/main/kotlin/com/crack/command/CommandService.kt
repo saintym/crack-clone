@@ -6,6 +6,8 @@ import com.crack.global.exception.BadRequestException
 import com.crack.memory.record.MemoryRecordService
 import com.crack.memory.record.RecordReason
 import com.crack.memory.record.TriggerResponse
+import com.crack.story.clock.StoryClockService
+import com.crack.story.clock.StoryClockView
 import com.crack.story.files.StoryDirs
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
@@ -18,7 +20,10 @@ enum class SystemCommand(val commandName: String, val description: String) {
     RECORD("기록", "지금까지의 대화를 기억에 기록"),
 
     /** 지속 OOC 지시 추가. 인자 없이 쓰면 지시 패널을 연다(프론트 처리) */
-    OOC("ooc", "해제할 때까지 지킬 지시 추가 (인자 없이 쓰면 지시 목록)");
+    OOC("ooc", "해제할 때까지 지킬 지시 추가 (인자 없이 쓰면 지시 목록)"),
+
+    /** 이야기 속 시각 맞추기 (T38). `/시간 2026-10-05 08:00` 또는 `/시간 +3일` */
+    TIME("시간", "이야기 속 시각 맞추기 (예: 2026-10-05 08:00, +3일)");
 
     companion object {
         fun find(name: String?): SystemCommand? {
@@ -40,12 +45,14 @@ data class SystemCommandResponse(
     val record: TriggerResponse? = null,
     /** `ooc`: 추가된 지시 */
     val directive: Directive? = null,
+    /** `시간`: 맞춰진 이야기 속 시각과 장소 (T38) */
+    val clock: StoryClockView? = null,
 )
 
 /**
  * `/` 명령 (DESIGN.md §8.2, D11).
  *
- * - 시스템 명령(`기록`, `ooc`)은 [runSystem]으로 즉시 실행한다.
+ * - 시스템 명령(`기록`, `ooc`, `시간`)은 [runSystem]으로 즉시 실행한다.
  * - 사용자 정의 명령은 스토리 폴더의 `commands.md`에서 읽는다(D12). 실행은 채팅 흐름이 맡고,
  *   여기서는 이번 턴 지시([turnInstruction])만 만든다.
  */
@@ -54,6 +61,7 @@ class CommandService(
     private val storyDirs: StoryDirs,
     private val directiveService: DirectiveService,
     private val memoryRecordService: MemoryRecordService,
+    private val storyClockService: StoryClockService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -72,6 +80,8 @@ class CommandService(
                     ?: throw BadRequestException("추가할 지시 내용이 비어 있습니다")
                 SystemCommandResponse(command.commandName, directive = directiveService.add(storyId, text))
             }
+            SystemCommand.TIME ->
+                SystemCommandResponse(command.commandName, clock = storyClockService.set(storyId, args))
         }
     }
 

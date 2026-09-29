@@ -4,6 +4,7 @@ import com.crack.chat.flow.EmotionTagFilter
 import com.crack.message.entity.MessageKind
 import com.crack.message.entity.StoryMessage
 import com.crack.message.service.MessageService
+import com.crack.story.clock.StoryClockService
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,10 +19,12 @@ import java.nio.file.Path
  *
  * 사람이 쓴 첫 메시지에도 AI 응답과 같은 첫 줄 태그 규칙을 적용한다(DESIGN.md §5.3).
  * `[인물: 설월/미소]`를 맨 앞에 적어 두면 인물 이미지가 붙고, 태그 자체는 본문에서 빠진다.
+ * `[시간: …]`·`[장소: …]`를 적어 두면 **거기서 이야기 속 시계가 시작한다**(§5.4, T38).
  */
 @Service
 class PrologueService(
     private val messageService: MessageService,
+    private val storyClockService: StoryClockService,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -45,6 +48,8 @@ class PrologueService(
             log.warn("첫 메시지가 태그뿐이라 건너뛴다. storyId={}, dir={}", storyId, storyDir)
             return null
         }
+        // 첫 줄에 `[시간: …]`이 있으면 여기서 시계를 시작한다(settings.json의 clock.start가 없을 때, T38)
+        storyClockService.start(storyDir, parsed.tags)
         return messageService.appendAssistant(
             storyId,
             parsed.body,
