@@ -1,9 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Message } from '../../types/chat';
 import type { StreamState } from '../../hooks/useChatStream';
 import type { ReadingMode } from '../../hooks/useReadingMode';
 import ChatBubble from './ChatBubble';
 import MessageMenu from './MessageMenu';
+import StoryClockHeader from './StoryClockHeader';
+import { storyClockHeaders, type StoryClockHeaderData } from './storyClock';
 
 interface MessageListProps {
   messages: Message[];
@@ -34,7 +36,21 @@ function TurnDivider() {
   return <hr className="border-0 border-t border-border/60 mb-6" />;
 }
 
-/** 메시지 목록, 스트리밍 중인 응답, 인라인 편집기와 재생성 지시 입력 */
+/**
+ * 메시지 위 자리. 이야기 속 시각·장소가 바뀌었으면 머리글을 그린다(T51, §5.4).
+ *
+ * 머리글은 소설형 **턴 구분선 자리를 대신한다** — 선을 또 그리지 않는다(§10.1).
+ * 머리글이 없으면 예전처럼 첫 턴을 뺀 자리에 구분선만 그린다.
+ */
+function TurnBreak({ header, novel, divider }: { header: StoryClockHeaderData | null; novel: boolean; divider: boolean }) {
+  if (header) return <StoryClockHeader data={header} mode={novel ? 'novel' : 'bubble'} />;
+  return novel && divider ? <TurnDivider /> : null;
+}
+
+/**
+ * 메시지 목록, 스트리밍 중인 응답, 인라인 편집기와 재생성 지시 입력.
+ * 이야기 속 시각·장소가 바뀐 자리에는 머리글을 끼운다(§5.4, T51).
+ */
 export default function MessageList({
   messages, stream, locked, onSelectVariant, onRegenerate, onContinue, onBranch, onEditSave, onDelete, mode,
 }: MessageListProps) {
@@ -52,6 +68,9 @@ export default function MessageList({
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messageCount, streamText, pendingUser, streamActive]);
+
+  // 머리글을 그릴 자리 (messages와 같은 길이). 날짜·장소가 바뀐 자리만 값이 있다
+  const clockHeaders = useMemo(() => storyClockHeaders(messages), [messages]);
 
   const last = messages[messages.length - 1];
   const latestAssistant = [...messages].reverse().find((m) => m.role === 'ASSISTANT');
@@ -103,7 +122,7 @@ export default function MessageList({
         if (streamingInPlace && stream?.targetId === msg.id) {
           return (
             <div key={msg.id}>
-              {novel && index > 0 && <TurnDivider />}
+              <TurnBreak header={clockHeaders[index]} novel={novel} divider={index > 0} />
               <ChatBubble role="ASSISTANT" content={stream.content} isStreaming mode={mode} />
             </div>
           );
@@ -112,7 +131,7 @@ export default function MessageList({
         const isEditing = editing?.id === msg.id;
         return (
           <div key={msg.id}>
-            {novel && index > 0 && <TurnDivider />}
+            <TurnBreak header={clockHeaders[index]} novel={novel} divider={index > 0} />
             {isEditing ? (
               <div className={novel ? 'block' : `flex ${isUser ? 'justify-end pl-10' : 'justify-start pr-10'}`}>
                 <div className={novel ? 'w-full' : 'max-w-[85%] w-full'}>
