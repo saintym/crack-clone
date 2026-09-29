@@ -24,6 +24,14 @@ export interface Message {
   speaker: string | null;
   /** ASSISTANT만. 인물 이미지 변형 이름. 없으면 `기본`으로 폴백한다 */
   speakerVariant: string | null;
+  /**
+   * ASSISTANT만. 이 장면이 도달한 이야기 속 시각 (§5.4, T38). 머리글이 쓴다(T51).
+   * 시간대가 붙지 않은 ISO-8601 지역 시각이다 — `2026-02-15T20:30:00`(초까지 온다).
+   * 시계를 쓰지 않는 스토리(옛 스토리, `clock.enabled: false`)는 모든 메시지가 null이다.
+   */
+  storyTime: string | null;
+  /** ASSISTANT만. 이 장면의 이야기 속 장소. 자유 문자열이다 (§5.4, T38) */
+  place: string | null;
   /** ASSISTANT만. 선택된 후보 번호(0부터). USER는 null */
   variantIndex: number | null;
   /** ASSISTANT만 의미가 있다. USER는 0 */
