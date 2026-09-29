@@ -828,13 +828,25 @@ workbox: {
 - **턴 구분선**은 `MessageList`의 `TurnDivider`가 첫 턴을 제외한 모든 턴 위에 넣는다. 스트리밍 중인 응답과 보내는 중인 사용자 입력 앞에도 같이 넣는다.
 - **인물 이미지(§8.5)는 두 모드에서 똑같이 동작한다.** 소설형에서는 본문 폭을 그대로 써서 더 크게 보인다.
 
-## 11. URL에서 시나리오 가져오기 (T28, D32)
+## 11. 시나리오 자동 생성 (T28 URL, T48 질문, D32·D47)
 
-설정이 정리된 웹페이지 URL을 주면 LLM이 읽어 **시나리오 한 벌**을 만든다. 페이지마다 형식이 달라 규칙 파싱이 아니라 LLM이 우리 형식으로 옮긴다. 추출 단계에서만 토큰을 줄인다.
+빈 템플릿을 손으로 채우지 않고 **시나리오 한 벌**(`world.md`·`scenario.md`·`characters/`·`prologue.md`·`keywords.md`·`images.md`)을 LLM으로 만든다. 입력원은 둘이다.
 
-패키지는 `com.crack.scenario.imports`다. `import`는 코틀린 예약어라 패키지 이름으로 쓸 수 없다(폴더도 `imports`).
+| | URL 가져오기 (§11.1~11.5, T28) | 질문으로 만들기 (§11.6, T48) |
+|---|---|---|
+| 맥락 | 웹페이지에서 추출한 본문·데이터 블록 | **씨앗 한 줄 + 여러 라운드의 질의응답** |
+| 질문 | 1회(페이지에 없는 것만) | 여러 라운드(밑바닥부터 만든다) |
+| 인물 | 페이지의 전원 | AI가 제안하고 사용자가 고른다 |
+| 이미지 | 페이지의 URL을 `{이름}_기본`으로 등록 | 없다(등록할 인물 태그만 주석으로) |
+| 생성 파이프라인 · 문서 포맷 · SSE · 원자적 생성 | **공용** | **공용** |
 
-### 11.1 추출 (LLM 호출 전)
+**패키지 나누기.** 둘 다 `com.crack.scenario.imports`다(`import`는 코틀린 예약어라 폴더도 `imports`).
+- 공용: `ScenarioBuildPipeline`(+`ScenarioBuildPrompts`/`ScenarioBuildSpec`), `ImportDocs`(문서 포맷), `ImportOutputParser`, `ImportWorkspace`(원자적 생성), `ImportExecutors`, `JobCache`(TTL 캐시), SSE 이벤트와 `SseEventSink`
+- 입력원별: URL은 `imports` 바로 아래(`PageFetcher`·`HtmlExtractor`·`SsrfGuard`·`ImportPrompts`·`ScenarioImportService`), 질의응답은 `imports.guided`
+
+파이프라인은 **입력원을 모른다.** 맥락은 `ScenarioBuildPrompts.system()`으로만 들어간다.
+
+### 11.1 추출 (URL 가져오기, LLM 호출 전)
 
 `PageFetcher` → `HtmlExtractor` → `ExtractedPage`.
 
@@ -917,3 +929,57 @@ crack:
 4. 완료 → 시나리오 상세로 이동. "문서를 확인하고 다듬으세요" 안내
 
 실패하면 어느 단계에서 왜 실패했는지 보여 준다. 화면에 "남의 페이지는 개인 이용 범위에서 쓰세요" 한 줄 안내를 둔다.
+
+### 11.6 질문으로 만들기 (T48, D47)
+
+URL이 없을 때 쓴다. **씨앗 한 줄**에서 시작해 AI가 묻고 사용자가 답한 것이 맥락이 된다. 패키지는 `com.crack.scenario.imports.guided`.
+
+| Method | Path | 설명 |
+|---|---|---|
+| POST | `/api/scenarios/create/start` | body `{seed}` → `jobId` + 1라운드 질문 |
+| POST | `/api/scenarios/create/{jobId}/answer` | body `{answers}` → 다음 질문 **또는** 준비 완료 + 미리보기 |
+| POST | `/api/scenarios/create/{jobId}/confirm` | body `{name, title?, characters?}` → **SSE** 생성 |
+
+```json
+// start 요청 {"seed": "무협. 주인공은 몰락한 가문의 검객. 분위기는 어둡고 건조하게."}
+// start·answer 응답 (아직 물을 것이 남았을 때)
+{ "jobId": "…", "round": 1, "done": false, "suggestedName": "검객", "title": "몰락한 검객",
+  "questions": [{"id": "q1", "text": "주인공의 이름은?", "placeholder": "예: 우혁규"}],
+  "preview": null, "estimatedLlmCalls": 0, "estimatedSeconds": 0 }
+// answer 응답 (준비되면)
+{ "jobId": "…", "round": 3, "done": true, "suggestedName": "검객", "title": "몰락한 검객", "questions": [],
+  "preview": { "title": "…", "world": "한 문단", "protagonist": "한 문단", "opening": "시작 장면 한 문단",
+               "characters": [{"name": "설월", "role": "화산파 일대제자", "note": "주인공과 악연"}] },
+  "estimatedLlmCalls": 7, "estimatedSeconds": 200 }
+```
+
+- `seed`는 한 줄이어도 된다. 비어 있으면 400. 라운드마다 LLM 1회, 질문은 한 라운드에 `max-questions-per-round`개까지.
+- **빈 답은 "모르겠다/알아서 해"로 받는다.** 프롬프트에 `(답하지 않았다. 네가 정한다)`로 들어간다. 되물어 막지 않는다.
+- 라운드 상한(`crack.create.max-rounds`, 기본 3)을 **다 쓰면 다음 호출에서 "더 묻지 말라"고 지시**해 `done: true`와 미리보기를 받는다.
+- 진행 중인 작업은 `CreateJobStore`(= 공용 `JobCache`)에 담는다. 없거나 만료되면 404고 씨앗부터 다시 한다. DB 테이블은 없다.
+- `confirm`의 `characters`를 주면 **그 목록만** 만든다(미리보기에서 지우거나 더한 결과). 없으면 미리보기 목록 그대로. 이미 있는 이름은 400.
+- SSE 이벤트(`step`/`done`/`error`)와 단계는 §11.2와 같다.
+
+**질문 프롬프트 (`CreatePrompts`)** — 고정 목록이 아니다. 라운드 주제만 주고 무엇을 물을지는 맥락이 정한다.
+1라운드 큰 틀(시대·장소·분위기, 주인공의 입지, 중심 갈등) → 2라운드 인물(곁과 맞은편에 누가, 주인공과 어떤 관계) → 3라운드 시작(첫 장면).
+- **씨앗과 지금까지의 답에서 이미 알 수 있는 것은 묻지 않는다**
+- **한 질문에 하나만** 묻는다. `placeholder`에 답 예시를 넣는다
+- **설정 상식은 AI가 채운다.** 문파 이름·지명·용어를 사용자에게 떠넘기지 않고 **취향과 방향**을 묻는다
+
+**생성물** — §11.3과 같되 셋이 다르다.
+1. 시스템 프롬프트의 맥락이 씨앗 + 질의응답 + 확정된 인물 목록이다
+2. 인물은 확정된 목록만 만든다
+3. `images.md`는 등록할 주소가 없으므로 주석만 남긴다: `<!-- 등록할 인물 태그: 설월_기본, 무극_기본 -->`
+
+**T35·T45를 따른다.** 인물 문서에 `## 알고 있는 것` 섹션을 만들고(비어 있어도 된다), 주인공 문서의 숨은 설정은 제목에 `(비공개)`를 붙인 섹션에 둔다. LLM이 빠뜨리면 `ImportDocs`가 빈 섹션을 채워 넣는다(`character(..., withKnown = true)`, `protagonist(..., withPrivate = true)`). 주인공 서술 금지는 BASE에 있으므로(§6.4-2) **시나리오 문서에 적지 않게** 프롬프트가 못 박는다. 출처 줄은 `<!-- 출처: 질문으로 생성 (자동 생성 {날짜}) -->`다.
+
+```yaml
+crack:
+  create:
+    max-rounds: 3               # 질문 라운드 상한
+    max-questions-per-round: 5
+    job-ttl-minutes: 30         # 진행 중인 생성 작업 캐시 TTL
+```
+인물 배치 크기·동시 실행 수는 `crack.import.*`를 그대로 쓴다(같은 파이프라인이다).
+
+화면은 T49가 맡는다.
