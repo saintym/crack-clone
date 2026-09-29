@@ -289,11 +289,16 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
 
   뒤따르는 기능은 빈만 추가한다: T17 `KEYWORDS`, T20 `IMAGES`, T16 지속 지시는 `BOTTOM` order 0(이번 턴 지시보다 먼저).
 
-### 6.1 대화 원문 범위
-- `turn_no > recorded_through_turn - overlap` (overlap 기본 2턴, `crack.prompt.overlap-turns`)
-- 기록이 계속 실패해도 폭주하지 않도록 상한을 둔다: 최근 `max-raw-turns`(기본 30턴, `crack.prompt.max-raw-turns`). 기준은 넣을 메시지 중 최대 턴이다(`turn_no > 최대 턴 - max-raw-turns`).
+### 6.1 대화 원문 범위 — 글자 예산 (T47)
+**턴 수가 아니라 글자 수로 정한다.** 턴 길이가 제각각이라(실측 720자 ~ 2,032자, 유저 입력은 제약 없음) "최근 N턴"으로는 프롬프트 크기를 예측할 수 없었다. 같은 "3턴"이 2,000자일 수도 6,000자일 수도 있다.
+
+- **최근 턴부터 거꾸로** 담고, 누적 글자 수가 `crack.prompt.raw-budget-chars`(기본 6000)를 넘으면 그 턴 앞에서 멈춘다. 담긴 턴은 항상 연속이다(예산에 맞는 오래된 턴을 건너뛰어 끼워 넣지 않는다)
+- **턴을 쪼개지 않는다.** 같은 `turn_no`의 메시지(유저 입력과 그 응답, 이어쓰기)는 함께 들어가거나 함께 빠진다
+- **`crack.prompt.raw-min-turns`(기본 2)턴은 예산을 넘겨도 넣는다.** 한 턴이 예산보다 길 수 있다. 1 미만은 1로 본다 — 원문이 하나도 없으면 대화가 끊긴다
+- 안전 상한은 그대로 둔다: 예산이 아무리 커도 최근 `max-raw-turns`(기본 30턴, `crack.prompt.max-raw-turns`)까지만 담는다. 기준은 넣을 메시지 중 최대 턴이다
 - 프롤로그는 turn 0이므로 기록 전에는 포함되고, 첫 기록 이후에는 빠진다(`recorded_through_turn >= 1`이면 turn 0은 항상 뺀다)
 - `recorded_through_turn`은 `RecordedTurnSource` 빈에서 읽는다. 빈이 없으면 0(T14 전). 로직은 `ConversationBuilder`(chat/flow)에 있다.
+- **`crack.prompt.overlap-turns`는 없앴다(T47).** "마지막 기록 턴 − overlap 초과만 넣는다"는 규칙은 기록 직후 원문을 2턴으로 줄여 예산을 거의 쓰지 못하게 만든다. 크기는 이제 예산이 잡고, "최소 몇 턴은 남긴다"는 몫은 `raw-min-turns`가 받는다. 기록된 구간이 원문에 남는 것은 중복이 아니라 연속성이다 — 기억 문서는 요약이고 원문은 말투와 세부를 지킨다.
 
 ### 6.2 활성 인물 선택 (D9)
 `state.json.companions` ∪ `KeywordMatcher`가 `recentText`에서 찾은 인물(파일명과 `별칭`).
@@ -317,7 +322,8 @@ interface RecordedTurnSource { fun recordedThroughTurn(storyId: Long): Int }
     sections: [{slot, name, chars, content}],          // 조립 순서, BOTTOM 포함
     activeCharacters: ["설월"],
     activeKeywords: ["흑풍채"],                        // 발동한 키워드북 항목 제목, 우선순위 순 (T17)
-    rawWindow: {recordedThroughTurn, afterTurn, messageCount},   // afterTurn: 이 턴 초과만 넣었다
+    rawWindow: {recordedThroughTurn, afterTurn, messageCount, turnCount, chars},  // afterTurn: 이 턴 초과만 넣었다
+                                                                 // turnCount·chars: 실제로 담긴 턴 수와 글자 수(§6.1 예산과 견준다)
     systemPrompt, messages: [{role, content}] }         // messages는 [지시]가 붙은 최종 형태
   ```
   `totalChars = systemChars + messageChars`. 글자 수는 Kotlin `String.length`(UTF-16 코드 유닛)다.
