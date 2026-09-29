@@ -46,10 +46,33 @@ data class ResponseChars(
 }
 
 /**
+ * 이야기 속 시계의 시작점 (T38, DESIGN.md §5.4, D39).
+ *
+ * ```json
+ * { "clock": { "start": "2026-02-15 19:00", "place": "후유키 심산정", "enabled": true } }
+ * ```
+ *
+ * - [start]가 없으면 프롤로그 첫 줄의 `[시간: …]` 태그에서 잡는다. 그것도 없으면 시계를 쓰지 않는다(옛 스토리 호환).
+ * - [enabled]가 false면 시계를 아예 쓰지 않는다. 자체 역법(`홍무 15년 8월 13일`)을 쓰는 시나리오에서
+ *   현실 달력 머리글이 같이 뜨면 어긋나 보이기 때문이다.
+ *
+ * 값 해석은 [com.crack.story.clock.StoryClock]이 한다. 여기서는 파일에 적힌 문자열을 그대로 담는다 —
+ * 이상한 값 하나가 JSON 읽기 전체를 깨뜨리지 않게 하려는 것이다.
+ */
+data class ClockSettings(
+    /** 시작 시각. `YYYY-MM-DD HH:mm`. 알아볼 수 없으면 경고 로그를 남기고 없는 것으로 본다 */
+    val start: String? = null,
+    /** 시작 장소. 자유 문자열이다(목록으로 묶지 않는다) */
+    val place: String? = null,
+    val enabled: Boolean = true,
+)
+
+/**
  * 스토리 폴더의 `settings.json` (DESIGN.md §6.4).
  *
  * ```json
- * { "responseChars": { "min": 1200, "max": 2200 }, "maxCharacterImages": 6, "alwaysActive": ["시즈카"] }
+ * { "responseChars": { "min": 1200, "max": 2200 }, "maxCharacterImages": 6, "alwaysActive": ["시즈카"],
+ *   "clock": { "start": "2026-02-15 19:00", "place": "후유키 심산정" } }
  * ```
  *
  * 선택 파일이다. 없으면 전역 기본값(`crack.prompt.response-chars`)을 쓴다.
@@ -73,6 +96,10 @@ data class StorySettings(
      * 이름은 인물 문서 파일명, 없으면 `별칭`과 대조한다(DESIGN.md §6.2).
      */
     val alwaysActive: List<String> = emptyList(),
+    /**
+     * 이야기 속 시계의 시작점 (T38, D39). 없으면 프롤로그 태그에서 잡고, 그것도 없으면 시계를 쓰지 않는다.
+     */
+    val clock: ClockSettings? = null,
 ) {
     companion object {
         const val FILE_NAME = "settings.json"
@@ -115,6 +142,12 @@ data class StorySettings(
          */
         fun alwaysActive(storyDir: Path): List<String> =
             read(storyDir).alwaysActive.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
+
+        /**
+         * 이 스토리의 시계 설정 (T38). 파일이 없거나 `clock`이 없으면 기본값(`enabled: true`, 시작 시각 없음)이다.
+         * 시작 시각이 없으면 프롤로그 태그가 시계를 켠다([com.crack.story.clock.StoryClockFiles]).
+         */
+        fun clock(storyDir: Path): ClockSettings = read(storyDir).clock ?: ClockSettings()
 
         /** 인물 이미지 수 상한의 허용 범위. 0이면 이미지를 넣지 않는다는 뜻으로 받아들인다. */
         const val MAX_IMAGES_ALLOWED = 20
