@@ -149,7 +149,7 @@ class MemoryRecordPipeline(
             newChronicle = newChronicle.append(ChronicleEntry(newChronicle.nextNumber(), job.fromTurn, job.toTurn, scenario.chronicle))
         }
 
-        // ④ 예산 초과 시 압축
+        // ④ 압축: 인물·주인공은 글자 예산, 연대기는 글자 예산 또는 회차 수
         newCharacters = newCharacters.map { doc ->
             if (!budgets.exceeds(doc)) doc
             else doc.withMemorySection(compressSection(CharacterDoc.MEMORY, doc.memorySection.orEmpty(), budgets.character))
@@ -158,7 +158,11 @@ class MemoryRecordPipeline(
             if (!budgets.exceeds(doc)) doc
             else doc.withChangesSection(compressSection(ProtagonistDoc.CHANGES, doc.changesSection.orEmpty(), budgets.protagonist))
         }
-        if (budgets.exceeds(newChronicle)) newChronicle = compressChronicle(newChronicle)
+        val chronicleOverBudget = budgets.exceeds(newChronicle)
+        val chronicleOverCount = overEntryLimit(newChronicle)
+        if (chronicleOverBudget || chronicleOverCount) {
+            newChronicle = compressChronicle(newChronicle, chronicleOverBudget, chronicleOverCount)
+        }
 
         val newState = scenario.state.copy(updatedAtTurn = job.toTurn)
 
@@ -223,11 +227,29 @@ class MemoryRecordPipeline(
             heading = title,
         )
 
-    /** 오래된 회차 절반(최소 1개, 최근 1개는 남긴다)을 장 요약으로 합친다. */
-    private fun compressChronicle(chronicle: Chronicle): Chronicle {
+    private fun overEntryLimit(chronicle: Chronicle): Boolean =
+        overEntryLimit(chronicle.entries().size, properties.chronicleMaxEntries)
+
+    /**
+     * 오래된 회차를 장 요약으로 합친다. 최근 1개는 반드시 남긴다.
+     *
+     * - 회차 수로 걸렸으면 목표 개수(`chronicle-max-entries`)까지 한 번에 접는다
+     * - 글자 예산으로만 걸렸으면 예전처럼 절반을 접는다
+     * - 한 번에 접는 개수에 상한을 두지 않는다(D45). 여러 번 나눠 접으면 장 요약을 그만큼 되풀이해 다시 쓰게 되고,
+     *   요약을 요약하는 횟수가 늘수록 더 많이 잃는다
+     */
+    private fun compressChronicle(chronicle: Chronicle, overBudget: Boolean, overCount: Boolean): Chronicle {
         val entries = chronicle.entries()
-        if (entries.size < 2) return chronicle
-        val n = (entries.size / 2).coerceAtLeast(1)
+        if (entries.size < 2) {
+            log.info("연대기 회차가 {}개뿐이라 압축하지 않는다", entries.size)
+            return chronicle
+        }
+        val n = foldCount(entries.size, properties.chronicleMaxEntries)
+        val reason = listOfNotNull(
+            "글자 예산 ${chronicle.rawLength()}자 > ${budgets.chronicle}자".takeIf { overBudget },
+            "회차 수 ${entries.size}개 > ${properties.chronicleMaxEntries}개".takeIf { overCount },
+        ).joinToString(", ")
+        log.info("연대기 압축({}): 회차 {}개 중 오래된 {}개를 장 요약으로 접는다", reason, entries.size, n)
         val summary = RecordOutputParser.parseCompressed(
             ask(RecordPrompts.COMPRESS_CHRONICLE, RecordInputs.compressChronicle(chronicle.summary, entries.take(n), budgets.chronicle)),
             heading = Chronicle.SUMMARY,
@@ -250,6 +272,25 @@ class MemoryRecordPipeline(
         const val PROTAGONIST = MemoryDocs.CHARACTERS_DIR + "/" + ProtagonistDoc.FILE_NAME
         private const val DEFAULT_PROTAGONIST_NAME = "주인공"
         private val ENTRY_NUMBER = Regex("""회차\s*(\d+)""")
+
+        /**
+         * 회차 수 트리거. [maxEntries]가 0 이하면 이 트리거를 쓰지 않는다
+         * (`crack.memory.record.chronicle-max-entries`, D45).
+         */
+        fun overEntryLimit(entryCount: Int, maxEntries: Int): Boolean = maxEntries > 0 && entryCount > maxEntries
+
+        /**
+         * 장 요약으로 접을 오래된 회차 수. 0이면 접지 않는다 (D45).
+         *
+         * - 회차 수로 걸렸으면 목표 개수([maxEntries])까지 한 번에 접는다
+         * - 글자 예산으로만 걸렸으면(또는 회차 수 트리거가 꺼져 있으면) 예전처럼 절반을 접는다
+         * - 둘 중 큰 쪽을 쓰되 **최근 1개는 반드시 남긴다.** 회차가 1개뿐이면 접지 않는다
+         */
+        fun foldCount(entryCount: Int, maxEntries: Int): Int {
+            if (entryCount < 2) return 0
+            val byCount = if (maxEntries > 0) entryCount - maxEntries else 0
+            return maxOf(byCount, entryCount / 2).coerceIn(1, entryCount - 1)
+        }
 
         fun characterRel(name: String) = MemoryDocs.CHARACTERS_DIR + "/" + name + ".md"
     }

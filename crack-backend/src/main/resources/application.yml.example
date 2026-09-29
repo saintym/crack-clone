@@ -66,7 +66,8 @@ crack:
       auto-enabled: true
       concurrency: 3           # 캐릭터 관리자 동시 실행 수
       max-attempts: 2          # 최초 1회 + 재시도 1회
-      chronicle-context-entries: 2
+      chronicle-context-entries: 2   # 시나리오 관리자에 넣는 연대기 최근 회차 수
+      chronicle-max-entries: 4       # 원문으로 남길 최근 회차 수. 넘으면 오래된 것부터 장 요약으로 접는다(0 이하면 끔)
   auth:
     password: ${CRACK_PASSWORD:changeme}
     token-secret: ${CRACK_TOKEN_SECRET:change-me-local-secret}   # 토큰 HMAC 서명 키. 바꾸면 기존 로그인이 모두 무효
