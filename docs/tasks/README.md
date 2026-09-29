@@ -1,6 +1,6 @@
 # 작업 보드
 
-> **T00~T23, T27~T37, T39~T44 `DONE`(42개).** 남은 것은 T24·T25(웨이브 8)와 **V2(웨이브 10): T38 → T26**이다. 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
+> **T00~T23, T27~T51 중 T25·T26만 빼고 `DONE`(50개).** 남은 것은 T25(웨이브 8)와 **V2(웨이브 10): T26**이다. T38·T51(스토리 시계)은 끝났다. 이어받는 세션은 [docs/HANDOFF.md](../HANDOFF.md)를 먼저 읽고, 새 작업은 §3.2 절차대로 `T22`부터 추가한다.
 
 > 설계: [docs/DESIGN.md](../DESIGN.md) · 병렬 운영(worktree, 일정, 머지): [docs/PARALLEL.md](../PARALLEL.md) · 결정 사항: [Plan-roadmap.md](../../Plan-roadmap.md) · 에이전트 규칙: [CLAUDE.md](../../CLAUDE.md)
 
