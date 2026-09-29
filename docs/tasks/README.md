@@ -52,6 +52,7 @@
 | 8 | [T47](./T47-raw-conversation-budget.md) | 대화 원문 범위를 글자 예산으로 | T13, T29 |
 | 8 | [T48](./T48-guided-scenario-creation.md) | 질문으로 시나리오 만들기 — 백엔드 | T28, T35, T45 |
 | 8 | [T49](./T49-guided-creation-ui.md) | 질문으로 시나리오 만들기 — 화면 | **T48** |
+| 8 | [T50](./T50-short-name-matching.md) | 짧은 이름 인물이 프롬프트에서 빠지는 문제 | T06, T29, T44 |
 | 8 | [T25](./T25-deep-query-fallback.md) | 검색이 헛돈 턴의 깊은 질의 1회 | T24 |
 | 8 | [T27](./T27-image-auto-insert.md) | 인물 이미지 자동 삽입(V8) + 카탈로그 등록 UX | — |
 | 8 | [T28](./T28-scenario-import-from-url.md) | URL에서 시나리오 가져오기 (분석 → 질문 → 생성) | T27 |
