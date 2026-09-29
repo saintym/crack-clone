@@ -91,5 +91,29 @@ class StorySettingsTest {
         val template = Path.of("..", "data", "_templates", StorySettings.FILE_NAME)
         val settings = StorySettings.fromJson(Files.readString(template))
         assertThat(settings.responseChars).isEqualTo(ResponseChars())
+        assertThat(settings.alwaysActive).isEmpty() // 템플릿은 그대로 두면 예전 동작
+    }
+
+    // ---- alwaysActive (T50, D48) ----
+
+    @Test
+    fun `alwaysActive는 없으면 빈 목록이다`() {
+        assertThat(StorySettings.alwaysActive(dir)).isEmpty()
+        write("""{"responseChars": {"min": 900, "max": 1600}}""")
+        assertThat(StorySettings.alwaysActive(dir)).isEmpty()
+        write("""{"alwaysActive": null}""")
+        assertThat(StorySettings.alwaysActive(dir)).isEmpty()
+    }
+
+    @Test
+    fun `alwaysActive는 앞뒤 공백과 빈 이름과 중복을 정리한다`() {
+        write("""{"alwaysActive": ["  시즈카 ", "렌", "", "   ", "시즈카"]}""")
+        assertThat(StorySettings.alwaysActive(dir)).containsExactly("시즈카", "렌")
+    }
+
+    @Test
+    fun `alwaysActive는 파일이 깨지면 빈 목록이다`() {
+        write("{ 깨진 json")
+        assertThat(StorySettings.alwaysActive(dir)).isEmpty()
     }
 }

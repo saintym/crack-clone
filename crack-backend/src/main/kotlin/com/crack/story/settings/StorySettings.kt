@@ -49,7 +49,7 @@ data class ResponseChars(
  * 스토리 폴더의 `settings.json` (DESIGN.md §6.4).
  *
  * ```json
- * { "responseChars": { "min": 1200, "max": 2200 }, "maxCharacterImages": 6 }
+ * { "responseChars": { "min": 1200, "max": 2200 }, "maxCharacterImages": 6, "alwaysActive": ["시즈카"] }
  * ```
  *
  * 선택 파일이다. 없으면 전역 기본값(`crack.prompt.response-chars`)을 쓴다.
@@ -66,6 +66,13 @@ data class StorySettings(
      * 상황 변형(자세·행동)을 쓰면 한 장면에서 여러 번 바뀔 수 있어 3장이 좁다. 스토리마다 다르게 둔다.
      */
     val maxCharacterImages: Int? = null,
+    /**
+     * 늘 곁에 있어서 언급이 없어도 활성 인물에 넣을 인물 (T50, D48). 없으면 빈 목록이다.
+     *
+     * 전속 호위·동료처럼 장면에 늘 있는 인물을 키워드 운에 맡기지 않으려는 것이다.
+     * 이름은 인물 문서 파일명, 없으면 `별칭`과 대조한다(DESIGN.md §6.2).
+     */
+    val alwaysActive: List<String> = emptyList(),
 ) {
     companion object {
         const val FILE_NAME = "settings.json"
@@ -101,6 +108,13 @@ data class StorySettings(
             }
             return fromJson(json, file.toString())
         }
+
+        /**
+         * 이 스토리에서 늘 활성인 인물 이름 (T50). 앞뒤 공백을 지우고, 빈 이름과 중복은 버린다.
+         * 파일이 없거나 값이 없으면 빈 목록이다 — 그러면 예전과 똑같이 동작한다.
+         */
+        fun alwaysActive(storyDir: Path): List<String> =
+            read(storyDir).alwaysActive.map { it.trim() }.filter { it.isNotEmpty() }.distinct()
 
         /** 인물 이미지 수 상한의 허용 범위. 0이면 이미지를 넣지 않는다는 뜻으로 받아들인다. */
         const val MAX_IMAGES_ALLOWED = 20
