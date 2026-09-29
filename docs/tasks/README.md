@@ -63,7 +63,8 @@
 | 8 | [T42](./T42-bulk-import-fields.md) | 일괄 등록 세 칸 + PWA 캐시 수정 | T41 |
 | 8 | [T43](./T43-bulk-import-character-check.md) | 일괄 등록 시 인물 문서 확인 | T41, T42 |
 | 8 | [T44](./T44-prompt-budget-and-grouping.md) | 프롬프트 예산 — 변형 묶기, 활성 인물 수 제한 | T40, T43 |
-| 10 (V2) | [T38](./T38-story-clock.md) | 스토리 시계 — 이야기 속 시각·장소(V9) | T30, T35 |
+| 10 (V2) | [T38](./T38-story-clock.md) | 스토리 시계 — 이야기 속 시각·장소(V9) · 백엔드 | T30, T35 |
+| 10 (V2) | [T51](./T51-story-clock-ui.md) | 스토리 시계 — 화면 머리글 | **T38** |
 | 10 (V2) | [T26](./T26-offscreen-characters.md) | 능동적 세계 — 오프스크린 캐릭터 에이전트(최대 3, 시간 기준) | **T38**, T24, T35 |
 
 진행 흐름 요약 (정확한 의존 관계는 위 표가 기준이다):
