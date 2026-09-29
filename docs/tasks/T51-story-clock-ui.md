@@ -1,6 +1,6 @@
 # T51 스토리 시계 — 화면 머리글
 
-- **상태**: TODO
+- **상태**: IN_PROGRESS
 - **웨이브**: 10 (V2)
 - **의존**: **T38**(API가 main에 머지된 뒤 시작한다)
 - **브랜치**: `task/T51-story-clock-ui`
@@ -41,3 +41,8 @@ T47 · 2026. 09. 26. 수요일. 에미야 저택
 - [ ] 프론트 build 통과, lint 오류 0
 
 ## 작업 로그
+
+### 2026-09-30 — 시작
+
+- 최신 main(T38 머지 후)에서 `task/T51-story-clock-ui`를 따고 시작했다. 상태를 `IN_PROGRESS`로 바꿨다.
+- 읽은 것: `docs/DESIGN.md` §5.4·§10.1, `docs/tasks/T38-story-clock.md` 작업 로그, `crack-backend/.../message/dto/MessageDto.kt`(`MessageView.storyTime`·`place` 계약 확인).
