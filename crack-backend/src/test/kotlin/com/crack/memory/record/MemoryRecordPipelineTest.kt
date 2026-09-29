@@ -1,5 +1,8 @@
 package com.crack.memory.record
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import com.crack.ai.dto.AiPurpose
 import com.crack.ai.dto.AiRequest
 import com.crack.ai.fake.FakeRecordResponder
@@ -28,6 +31,7 @@ import org.assertj.core.api.Assertions.assertThatThrownBy
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
 import org.springframework.boot.test.context.SpringBootTest
@@ -69,6 +73,7 @@ class MemoryRecordPipelineTest {
     @Autowired lateinit var messageService: MessageService
     @Autowired lateinit var dataPaths: DataPaths
     @Autowired lateinit var budgets: MemoryBudgets
+    @Autowired lateinit var recordProperties: MemoryRecordProperties
 
     private lateinit var scenario: Scenario
     private lateinit var scenarioDir: Path
@@ -136,6 +141,22 @@ class MemoryRecordPipelineTest {
     private fun isCharacterCall(req: AiRequest) = req.systemPrompt == RecordPrompts.CHARACTER_MANAGER
 
     private fun respondRecord(responder: (AiRequest) -> String) = fakeResponses.register(AiPurpose.RECORD, responder)
+
+    /** 파이프라인 로거에 붙는 메모리 appender. [LogCapture.stop]으로 뗀다. */
+    private class LogCapture(private val logger: Logger, private val appender: ListAppender<ILoggingEvent>) {
+        fun messages(): List<String> = appender.list.map { it.formattedMessage }
+        fun stop() {
+            logger.detachAppender(appender)
+            appender.stop()
+        }
+    }
+
+    private fun captureRecordLogs(): LogCapture {
+        val logger = LoggerFactory.getLogger(MemoryRecordPipeline::class.java) as Logger
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        logger.addAppender(appender)
+        return LogCapture(logger, appender)
+    }
 
     // ---- 테스트 ----
 
@@ -452,6 +473,53 @@ class MemoryRecordPipelineTest {
         val chronicle = Chronicle.read(storyDir.resolve("chronicle.md"))
         assertThat(chronicle.summary).contains("fake 기록")
         assertThat(chronicle.entries().last().fromTurn to chronicle.entries().last().toTurn).isEqualTo(1 to 2)
+    }
+
+    @Test
+    fun `회차 수가 상한을 넘으면 글자 예산 밑이어도 목표 개수까지 접고 사유를 로그에 남긴다`() {
+        addTurns(2)
+        val many = (1..6).fold(Chronicle.empty()) { c, n ->
+            c.append(com.crack.memory.docs.ChronicleEntry(n, n, n, "- 짧은 사건 $n"))
+        }
+        Files.writeString(storyDir.resolve("chronicle.md"), many.text)
+        assertThat(budgets.exceeds(many)).isFalse() // 글자 예산은 한참 밑이다
+        assertThat(recordProperties.chronicleMaxEntries).isEqualTo(4)
+
+        val logs = captureRecordLogs()
+        try {
+            assertThat(recordNow().status).isEqualTo(RecordStatus.DONE)
+        } finally {
+            logs.stop()
+        }
+
+        // 회차 7개(새 회차 포함) 중 오래된 3개를 접어 목표 4개가 된다
+        val chronicle = Chronicle.read(storyDir.resolve("chronicle.md"))
+        assertThat(chronicle.entries().map { it.number }).containsExactly(4, 5, 6, 7)
+        assertThat(chronicle.summary).contains("회차 1–3 요약 (fake 기록")
+        assertThat(logs.messages()).anySatisfy { line ->
+            assertThat(line).contains("연대기 압축", "회차 수 7개 > 4개", "오래된 3개")
+        }
+    }
+
+    @Test
+    fun `회차가 상한 이하면 압축하지 않는다`() {
+        addTurns(2)
+        val few = (1..3).fold(Chronicle.empty()) { c, n ->
+            c.append(com.crack.memory.docs.ChronicleEntry(n, n, n, "- 짧은 사건 $n"))
+        }
+        Files.writeString(storyDir.resolve("chronicle.md"), few.text)
+        val compressCalls = AtomicInteger()
+        respondRecord { req ->
+            if (req.systemPrompt == RecordPrompts.COMPRESS_CHRONICLE) compressCalls.incrementAndGet()
+            fakeRecord.respond(req)
+        }
+
+        assertThat(recordNow().status).isEqualTo(RecordStatus.DONE)
+
+        assertThat(compressCalls.get()).isZero() // 회차 4개 = 상한이라 아직 접지 않는다
+        val chronicle = Chronicle.read(storyDir.resolve("chronicle.md"))
+        assertThat(chronicle.entries().map { it.number }).containsExactly(1, 2, 3, 4)
+        assertThat(chronicle.summary).isNull()
     }
 
     @Test
