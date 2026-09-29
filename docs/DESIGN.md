@@ -782,6 +782,7 @@ src/hooks/useProviders.ts           프로바이더 목록과 선택
 src/hooks/useStoryContext.ts        현재 스토리, 시나리오, 사이드바 목록
 src/hooks/useReadingMode.ts         읽기 모드(말풍선/소설형), localStorage에 저장 (T31)
 src/components/scenario/ImageBulkImport.tsx  이미지 일괄 등록 세 칸 (§8.6, T42)
+src/components/scenario/ScenarioCreateSheet.tsx  질문으로 시나리오 만들기 단계형 하단 시트 (§11.6, T49)
 src/types/chat.ts, types/panel.ts   공용 타입
 src/components/chat/ChatHeader.tsx
 src/components/chat/MessageList.tsx
