@@ -1,6 +1,7 @@
 package com.crack.prompt.contributor
 
 import com.crack.prompt.config.PromptProperties
+import com.crack.story.clock.StoryClockFiles
 import com.crack.story.settings.ResponseChars
 import com.crack.story.settings.StorySettings
 import org.springframework.stereotype.Component
@@ -16,6 +17,9 @@ import java.util.Locale
  *
  * 출력 형식에는 응답 분량 목표도 들어간다(§6.4, D33). 전역 기본값은 `crack.prompt.response-chars`이고,
  * 스토리 폴더의 `settings.json`이 있으면 그 값이 이긴다.
+ *
+ * **이야기 속 시계를 쓰는 스토리**(§5.4, T38)에서는 출력 형식에 시각·장소 태그 규칙([CLOCK_RULES])이 더 붙는다.
+ * 시계를 쓰지 않는 스토리의 프롬프트는 예전과 한 글자도 다르지 않다.
  */
 @Component
 class BaseContributor(
@@ -25,7 +29,10 @@ class BaseContributor(
     override val order = 0
 
     override fun contribute(ctx: PromptContext): String =
-        text(StorySettings.responseChars(ctx.storyDir, properties.responseChars))
+        text(
+            StorySettings.responseChars(ctx.storyDir, properties.responseChars),
+            clock = StoryClockFiles.isOn(ctx.storyDir),
+        )
 
     companion object {
 
@@ -116,9 +123,9 @@ class BaseContributor(
         const val OUTPUT_FORMAT = """## 출력 형식
 응답의 맨 첫 줄에 태그 줄을 쓰고, 빈 줄을 하나 둔 뒤 본문을 작성하세요. **태그 줄은 독자에게 보이지 않습니다.**
 
-태그 줄 형식: [감정: (현재 감정 1~3개)] [인물: (중심 인물 이름)/(이미지 변형)]
+태그 줄 형식: {{CLOCK_TAGS}}[감정: (현재 감정 1~3개)] [인물: (중심 인물 이름)/(이미지 변형)]
 
-- `[감정: …]`은 매번 씁니다. 감정 이름은 자유롭게 고르세요.
+{{CLOCK_RULES}}- `[감정: …]`은 매번 씁니다. 감정 이름은 자유롭게 고르세요.
 - `[인물: …]`은 이번 장면의 **중심 인물 한 명**입니다. 여러 명이 나와도 한 명만 적습니다.
   - 이름과 변형은 아래 "이미지" 섹션에 주어진 목록에서만 고릅니다. 목록에 없는 이름이나 변형은 쓰지 마세요.
   - 마땅한 변형이 없으면 `/변형`을 빼고 `[인물: 이름]`만 쓰세요.
@@ -129,7 +136,7 @@ class BaseContributor(
 {{RESPONSE_CHARS}}
 
 예시:
-[감정: 경계심, 호기심] [인물: 설월/경계]
+{{CLOCK_EXAMPLE}}[감정: 경계심, 호기심] [인물: 설월/경계]
 
 *차가운 바람이 얼굴을 스치고 지나갔다. 그녀는 좁은 골목 끝에 서서 어둠 속을 응시했다. 미세한 발소리가 등 뒤에서 들려왔지만, 고개를 돌리지 않았다.*
 
@@ -150,12 +157,39 @@ class BaseContributor(
             "- 분량은 한 응답에 약 ${n(chars.min)}~${n(chars.max)}자를 목표로 한다. " +
                 "장면이 짧게 끝나야 할 때는 더 짧아도 되지만, ${n(chars.hardMax)}자를 넘기지 마라."
 
-        fun outputFormat(chars: ResponseChars): String =
-            OUTPUT_FORMAT.replace("{{RESPONSE_CHARS}}", responseCharsLine(chars))
+        /** 태그 줄 형식에 붙는 시각·장소 태그 (T38). 시계를 쓰는 스토리에서만 들어간다 */
+        const val CLOCK_TAGS = "[시간: (이 장면이 도달한 시각)] [장소: (장면이 끝난 시점의 장소)] "
 
-        fun text(chars: ResponseChars): String =
-            listOf(MASTER_RULES, RULES, PROTAGONIST_RULES, KNOWLEDGE_RULES, USER_INPUT_RULES, outputFormat(chars))
-                .joinToString("\n\n")
+        /** 출력 형식 예시에 붙는 시각·장소 태그 (T38) */
+        const val CLOCK_EXAMPLE = "[시간: 2026-09-28 23:40] [장소: 후유키 뒷골목] "
+
+        /**
+         * 이야기 속 시각·장소 태그 규칙 (§5.4, T38, D39). 시계를 쓰는 스토리의 출력 형식에만 들어간다.
+         *
+         * 경과분(`+45분`)이 아니라 **도달한 절대 시각**을 적게 한다. 현재 시각은 어차피 프롬프트에 있으므로
+         * 산술을 시키지 않는 쪽이 정확하다. 턴당 고정값도 쓰지 않는다 — 3분짜리 전투가 10턴을 잡아먹기도 하고,
+         * 지루한 일상 작업 한 턴이 몇 시간이기도 하다. **장면의 길이는 AI가 판단해야 한다.**
+         */
+        const val CLOCK_RULES = """- `[시간: …]`에는 **이 장면이 도달한 시각**을 `YYYY-MM-DD HH:mm`으로 적습니다. 흐른 시간이 아니라 시각입니다.
+- 장면의 길이는 **내용에 맞게** 판단하세요. 전투 한 합은 몇 분, 하루치 작업은 몇 시간입니다. 턴마다 같은 만큼 흐르지 않습니다.
+- **유저 입력에 시간 표현이 있으면 반드시 그것을 따릅니다** — "그렇게 일주일이 흐른다", "한 달 후", "그날 늦은 밤이 되어".
+- **시각은 되돌아가지 않습니다.** 아래 `[현재 시각]`보다 이른 값을 적지 마세요. 장면이 그 자리에서 이어지면 같은 시각을 그대로 적어도 됩니다.
+- `[장소: …]`에는 장면이 끝난 시점에 주인공이 있는 곳을 적습니다. 옮기지 않았으면 `[현재 장소]`를 그대로 적습니다."""
+
+        // 시계를 쓰지 않으면 자리 표시자가 빈 문자열로 바뀌어 예전 문구와 한 글자도 다르지 않다
+        fun outputFormat(chars: ResponseChars, clock: Boolean = false): String =
+            OUTPUT_FORMAT
+                .replace("{{RESPONSE_CHARS}}", responseCharsLine(chars))
+                .replace("{{CLOCK_TAGS}}", if (clock) CLOCK_TAGS else "")
+                .replace("{{CLOCK_EXAMPLE}}", if (clock) CLOCK_EXAMPLE else "")
+                .replace("{{CLOCK_RULES}}", if (clock) CLOCK_RULES + "\n" else "")
+
+        /** @param clock 이야기 속 시계를 쓰는 스토리인지 (T38). 끄면 출력 형식이 예전과 같다 */
+        fun text(chars: ResponseChars, clock: Boolean = false): String =
+            listOf(
+                MASTER_RULES, RULES, PROTAGONIST_RULES, KNOWLEDGE_RULES, USER_INPUT_RULES,
+                outputFormat(chars, clock),
+            ).joinToString("\n\n")
 
         /** `1500` → `1,500`. 로케일에 따라 달라지지 않게 고정한다. */
         private fun n(value: Int): String = String.format(Locale.US, "%,d", value)
