@@ -5,8 +5,9 @@ import org.assertj.core.api.Assertions.assertThat
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+import java.time.LocalDateTime
 
-/** 첫 줄 감정·인물 태그 필터 (DESIGN.md §5.3, D19·D31) */
+/** 첫 줄 감정·인물·시각·장소 태그 필터 (DESIGN.md §5.3, §5.4, D19·D31·D39) */
 class EmotionTagFilterTest {
 
     private class Recorder : TaggedResponseListener {
@@ -21,9 +22,14 @@ class EmotionTagFilterTest {
         val emotion: String? get() = tags.emotion
         val speaker: String? get() = tags.speaker
         val speakerVariant: String? get() = tags.speakerVariant
+        val storyTime: LocalDateTime? get() = tags.storyTime
+        val place: String? get() = tags.place
+
         /** delta에 태그 조각이 하나도 실리지 않았는지 */
         fun assertNoTagLeak() {
-            assertThat(deltas).noneMatch { it.contains("감정") || it.contains("인물") || it.contains("[") }
+            assertThat(deltas).noneMatch {
+                it.contains("감정") || it.contains("인물") || it.contains("시간") || it.contains("장소") || it.contains("[")
+            }
         }
     }
 
@@ -281,6 +287,95 @@ class EmotionTagFilterTest {
 
         assertThat(parsed.tags).isEqualTo(ResponseTags.NONE)
         assertThat(parsed.body).isEqualTo(text)
+    }
+
+    // ── 시각·장소 태그 (T38, DESIGN.md §5.4) ──
+
+    @ParameterizedTest
+    @ValueSource(ints = [1, 2, 5, 11, 1000])
+    fun `시각과 장소 태그를 감정·인물과 같은 줄에서 떼어 낸다`(chunk: Int) {
+        val r = run("[시간: 2026-09-28 23:40] [장소: 에미야 저택] [감정: 피로] [인물: 사쿠라]\n\n$body", chunk)
+
+        assertThat(r.deltas.joinToString("")).isEqualTo(body)
+        r.assertNoTagLeak()
+        assertThat(r.body).isEqualTo(body)
+        assertThat(r.storyTime).isEqualTo(LocalDateTime.of(2026, 9, 28, 23, 40))
+        assertThat(r.place).isEqualTo("에미야 저택")
+        assertThat(r.emotion).isEqualTo("피로")
+        assertThat(r.speaker).isEqualTo("사쿠라")
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = [1, 3, 1000])
+    fun `시각 태그만 있어도 떼어 낸다`(chunk: Int) {
+        val r = run("[시간: 2026-09-28T23:40]\n$body", chunk)
+
+        assertThat(r.deltas.joinToString("")).isEqualTo(body)
+        r.assertNoTagLeak()
+        assertThat(r.storyTime).isEqualTo(LocalDateTime.of(2026, 9, 28, 23, 40))
+        assertThat(r.place).isNull()
+    }
+
+    @Test
+    fun `시각 태그 앞부분인 동안은 기다린다`() {
+        val recorder = Recorder()
+        val filter = EmotionTagFilter(recorder)
+        listOf("[시", "간: 2026-", "09-28 23:40", "]").forEach(filter::onDelta)
+        assertThat(recorder.deltas).isEmpty()
+        filter.onDelta("\n본문")
+        filter.onComplete("[시간: 2026-09-28 23:40]\n본문")
+
+        assertThat(recorder.deltas).containsExactly("본문")
+        assertThat(recorder.storyTime).isEqualTo(LocalDateTime.of(2026, 9, 28, 23, 40))
+    }
+
+    @Test
+    fun `장소 태그 앞부분인 동안도 기다린다`() {
+        val recorder = Recorder()
+        val filter = EmotionTagFilter(recorder)
+        listOf("[장", "소: 후유키", " 심산정]").forEach(filter::onDelta)
+        assertThat(recorder.deltas).isEmpty()
+        filter.onDelta("\n본문")
+        filter.onComplete("[장소: 후유키 심산정]\n본문")
+
+        assertThat(recorder.deltas).containsExactly("본문")
+        assertThat(recorder.place).isEqualTo("후유키 심산정")
+    }
+
+    @Test
+    fun `알아볼 수 없는 시각 태그는 값 없이 떼어 낸다`() {
+        val parsed = EmotionTagFilter.parse("[시간: 그날 늦은 밤] [장소: 골목]\n본문")
+
+        assertThat(parsed.tags.storyTime).isNull()
+        assertThat(parsed.tags.place).isEqualTo("골목")
+        assertThat(parsed.body).isEqualTo("본문")
+    }
+
+    @Test
+    fun `장소 값은 태그 값 상한 안에서만 읽고 칼럼 크기로 자른다`() {
+        val parsed = EmotionTagFilter.parse("[장소: ${"가".repeat(150)}]\n본문")
+        assertThat(parsed.tags.place).hasSize(150)
+        assertThat(parsed.body).isEqualTo("본문")
+
+        // 태그 값 상한을 넘으면 태그로 보지 않는다(닫히지 않은 대괄호로 스트림이 막히지 않게)
+        val tooLong = "[장소: ${"가".repeat(EmotionTagFilter.MAX_TAG_LINE + 10)}]\n본문"
+        assertThat(EmotionTagFilter.parse(tooLong).tags.place).isNull()
+
+        // 어딘가에서 더 긴 값이 들어와도 칼럼 크기로 자른다
+        assertThat(ResponseTags.of(null, place = "가".repeat(400)).place).hasSize(ResponseTags.MAX_PLACE)
+    }
+
+    @Test
+    fun `태그 네 개가 앞머리 뒤에 있어도 회수한다`() {
+        val text = "Let me continue the scene.\n\n" +
+            "[시간: 2026-09-28 23:40] [장소: 에미야 저택] [감정: 피로] [인물: 사쿠라]\n\n*문이 닫혔다.*"
+
+        val parsed = EmotionTagFilter.parse(text)
+
+        assertThat(parsed.tags.storyTime).isEqualTo(LocalDateTime.of(2026, 9, 28, 23, 40))
+        assertThat(parsed.tags.place).isEqualTo("에미야 저택")
+        assertThat(parsed.tags.speaker).isEqualTo("사쿠라")
+        assertThat(parsed.body).isEqualTo("*문이 닫혔다.*")
     }
 
     @Test

@@ -47,6 +47,17 @@ class StoryMessage(
     @Column(name = "speaker_variant", length = 50)
     var speakerVariant: String? = null,
 
+    /**
+     * 이야기 속 시각 (T38, DESIGN.md §5.4). 선택된 후보의 사본이다.
+     * 시계를 쓰지 않는 스토리(옛 스토리, `clock.enabled: false`)는 null로 남는다.
+     */
+    @Column(name = "story_time")
+    var storyTime: LocalDateTime? = null,
+
+    /** 이야기 속 장소 (T38). 선택된 후보의 사본. 자유 문자열이다 */
+    @Column(length = 200)
+    var place: String? = null,
+
     /** ASSISTANT만. 0부터. */
     @Column(name = "selected_variant")
     var selectedVariant: Int? = null,

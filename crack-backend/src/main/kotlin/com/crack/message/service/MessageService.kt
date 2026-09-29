@@ -116,6 +116,8 @@ class MessageService(
                 emotion = tags.emotion,
                 speaker = tags.speaker,
                 speakerVariant = tags.speakerVariant,
+                storyTime = tags.storyTime,
+                place = tags.place,
                 selectedVariant = 0,
             )
         )
@@ -127,6 +129,8 @@ class MessageService(
                 emotion = tags.emotion,
                 speaker = tags.speaker,
                 speakerVariant = tags.speakerVariant,
+                storyTime = tags.storyTime,
+                place = tags.place,
             )
         )
         updateTurnCount(story, maxOf(maxTurn, resolvedTurn))
@@ -147,6 +151,8 @@ class MessageService(
                 emotion = tags.emotion,
                 speaker = tags.speaker,
                 speakerVariant = tags.speakerVariant,
+                storyTime = tags.storyTime,
+                place = tags.place,
                 instruction = instruction,
             )
         )
@@ -155,6 +161,8 @@ class MessageService(
         message.emotion = tags.emotion
         message.speaker = tags.speaker
         message.speakerVariant = tags.speakerVariant
+        message.storyTime = tags.storyTime
+        message.place = tags.place
         return messageRepository.save(message)
     }
 
@@ -170,6 +178,8 @@ class MessageService(
         message.emotion = variant.emotion
         message.speaker = variant.speaker
         message.speakerVariant = variant.speakerVariant
+        message.storyTime = variant.storyTime
+        message.place = variant.place
         return messageRepository.save(message)
     }
 
