@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { scenarioApi, type Scenario } from '../api/scenarios';
 import MobileLayout from '../components/layout/MobileLayout';
+import ScenarioCreateSheet from '../components/scenario/ScenarioCreateSheet';
 import ScenarioImportSheet from '../components/scenario/ScenarioImportSheet';
 
 export default function ScenariosPage() {
   const [scenarios, setScenarios] = useState<Scenario[]>([]);
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showGuided, setShowGuided] = useState(false);
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
@@ -54,11 +56,23 @@ export default function ScenariosPage() {
     <MobileLayout
       title="시나리오"
       rightAction={
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setShowGuided(true)}
+            title="질문으로 만들기"
+            className="h-9 px-2.5 flex items-center gap-1 rounded-full bg-surface hover:bg-surface-hover text-text-secondary text-[11px] transition-all"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M9.1 9a3 3 0 015.8 1c0 2-3 2.5-3 4" />
+              <path d="M12 17.5h.01" />
+              <circle cx="12" cy="12" r="9" />
+            </svg>
+            질문
+          </button>
           <button
             onClick={() => setShowImport(true)}
-            title="URL로 가져오기"
-            className="h-9 px-3 flex items-center gap-1.5 rounded-full bg-surface hover:bg-surface-hover text-text-secondary text-xs transition-all"
+            title="URL에서 가져오기"
+            className="h-9 px-2.5 flex items-center gap-1 rounded-full bg-surface hover:bg-surface-hover text-text-secondary text-[11px] transition-all"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" />
@@ -90,16 +104,22 @@ export default function ScenariosPage() {
             </svg>
             <p className="text-sm mb-1">아직 시나리오가 없습니다</p>
             <button
-              onClick={() => setShowCreate(true)}
+              onClick={() => setShowGuided(true)}
               className="mt-4 text-accent text-sm font-medium hover:text-accent-hover transition-colors"
             >
-              새 시나리오 만들기
+              질문에 답해서 만들기
             </button>
             <button
               onClick={() => setShowImport(true)}
               className="mt-2 text-text-muted text-sm hover:text-text-secondary transition-colors"
             >
-              URL로 가져오기
+              URL에서 가져오기
+            </button>
+            <button
+              onClick={() => setShowCreate(true)}
+              className="mt-2 text-text-muted text-sm hover:text-text-secondary transition-colors"
+            >
+              빈 시나리오 만들기
             </button>
           </div>
         ) : (
@@ -144,6 +164,13 @@ export default function ScenariosPage() {
           ))
         )}
       </div>
+
+      {showGuided && (
+        <ScenarioCreateSheet
+          onClose={() => { setShowGuided(false); loadScenarios(); }}
+          onCreated={(done) => { setShowGuided(false); navigate(`/scenario/${done.name}`); }}
+        />
+      )}
 
       {showImport && (
         <ScenarioImportSheet
