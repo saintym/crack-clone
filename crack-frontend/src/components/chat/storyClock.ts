@@ -76,19 +76,18 @@ export interface StoryClockHeaderData {
   when: string;
   /** 이야기 속 장소. 없으면 null */
   place: string | null;
-  /** 이야기 속 시각 `23:40`. 머리글 본문에는 넣지 않고 도움말로만 쓴다(아래 설명) */
+  /** 이 장면이 **시작한** 이야기 속 시각 `23:40`. 아래 이어지는 턴에서는 분이 조금씩 흐른다 */
   time: string;
 }
 
 /**
  * 머리글 하나와 그 **비교 열쇠**. 열쇠가 직전과 같으면 다시 그리지 않는다.
  *
- * 열쇠에 **분을 넣지 않는다.** 두 가지 이유다.
- * 1. AI는 태그를 매 턴 적으므로 분까지 비교하면 머리글이 매 턴 떠서 소설 흐름이 끊긴다(명세가 막은 것).
- * 2. 머리글은 그 아래로 이어지는 여러 턴을 **머리글로 이고 있다.** 19:00이라 적힌 머리글 밑에서
- *    장면이 23:40까지 가면 그 숫자는 틀린 값이 된다. 날짜와 장소는 이고 있는 구간 동안 변하지 않는다.
- *
- * 분은 도움말(`title`)로만 보여 준다. 날짜가 바뀌거나 장소가 바뀌면 새 머리글이 뜬다.
+ * **열쇠는 날짜와 장소다. 시각은 보여 주되 비교하지 않는다.**
+ * AI는 태그를 매 턴 적고 대화 한 마디에 1분씩 흘려 놓는다(T38 실측). 분까지 비교하면
+ * 머리글이 매 턴 떠서 소설 흐름이 끊긴다 — 명세가 막은 것이다.
+ * 장면이 바뀌면(자리를 옮기거나 날이 가면) 열쇠가 바뀌어 새 머리글이 뜨고,
+ * 그 머리글의 시각은 **그 장면이 시작한 시각**이다.
  */
 function headerOf(msg: StoryClockSource): { key: string; data: StoryClockHeaderData } | null {
   const parts = parseStoryTime(msg.storyTime);
@@ -134,7 +133,7 @@ export function storyClockHeaders(messages: readonly StoryClockSource[]): (Story
   });
 }
 
-/** 머리글 한 줄 (`T47 · 2026. 09. 26. 수요일. 에미야 저택`). 도움말과 눈 검증에 쓴다 */
+/** 머리글 한 줄 (`T47 · 2026. 09. 26. 토요일 23:40. 에미야 저택`). 화면 낭독기와 눈 검증에 쓴다 */
 export function storyClockLine(data: StoryClockHeaderData): string {
-  return `T${data.turn} · ${data.when}${data.place ? `. ${data.place}` : ''}`;
+  return `T${data.turn} · ${data.when} ${data.time}${data.place ? `. ${data.place}` : ''}`;
 }
